@@ -84,12 +84,11 @@ def main() -> int:
 
     lock_file, acquired = acquire_single_instance_lock(paths.lock_file_path)
     if not acquired:
-        info_ok, pid, hostname, appname = lock_file.getLockInfo()
+        pid, hostname, appname = lock_file.getLockInfo()
         logger.warning(
-            "Single-instance lock held at %s (error=%s, info_ok=%s, pid=%s, host=%s, app=%s); exiting.",
+            "Single-instance lock held at %s (error=%s, pid=%s, host=%s, app=%s); exiting.",
             paths.lock_file_path,
             lock_file.error(),
-            info_ok,
             pid,
             hostname,
             appname,

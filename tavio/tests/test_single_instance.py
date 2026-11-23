@@ -35,8 +35,7 @@ def test_long_lived_single_instance_lock_blocks_second_instance_and_releases_cle
         assert second_lock.isLocked() is False
         assert second_lock.error() == QLockFile.LockError.LockFailedError
 
-        info_ok, pid, hostname, _appname = second_lock.getLockInfo()
-        assert info_ok is True
+        pid, hostname, _appname = second_lock.getLockInfo()
         assert pid == os.getpid()
         assert hostname != ""
     finally:
