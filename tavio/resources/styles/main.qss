@@ -1,0 +1,104 @@
+/* TAVIO Phase 0 Minimal Desktop Stylesheet */
+
+QMainWindow {
+    background-color: #f4f6f9;
+}
+
+#Sidebar {
+    background-color: #16243b;
+    border-right: 1px solid #0f1a2c;
+}
+
+#BrandTitle {
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+#BrandSubtitle {
+    color: #9eb3d1;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+#NavigationList {
+    background-color: transparent;
+    border: none;
+    color: #dbe6f5;
+    font-size: 13px;
+    outline: none;
+}
+
+#NavigationList::item {
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+}
+
+#NavigationList::item:hover {
+    background-color: #213556;
+}
+
+#NavigationList::item:selected {
+    background-color: #2f5597;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+#PageTitle {
+    font-size: 18px;
+    font-weight: 700;
+    color: #16243b;
+}
+
+#SectionTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e3252;
+}
+
+#FieldLabel {
+    font-weight: 600;
+    color: #34495e;
+}
+
+#Card {
+    background-color: #ffffff;
+    border: 1px solid #d9e1ec;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+QTableWidget {
+    background-color: #ffffff;
+    border: 1px solid #d9e1ec;
+    border-radius: 6px;
+    gridline-color: #e6ecf5;
+}
+
+QHeaderView::section {
+    background-color: #eef2f8;
+    color: #16243b;
+    font-weight: 600;
+    padding: 6px;
+    border: none;
+    border-bottom: 1px solid #d9e1ec;
+}
+
+QPushButton {
+    background-color: #2f5597;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background-color: #24447a;
+}
+
+QPushButton:pressed {
+    background-color: #1c3560;
+}

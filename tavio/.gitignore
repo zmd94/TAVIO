@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+.venv/
+venv/
+build/
+dist/
+
+# Testing & Linters
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local runtime data & SQLite artifacts
+*.db
+*.db-wal
+*.db-shm
+*.lock
+*.log
+
+# IDE
+.vscode/
+.idea/
