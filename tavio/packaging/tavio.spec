@@ -5,9 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
-
-block_cipher = None
+from PyInstaller.utils.hooks import collect_all
 
 PROJECT_ROOT = Path(SPECPATH).resolve().parent
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -16,23 +14,26 @@ ICON_PATH = RESOURCES_DIR / "icons" / "tavio.ico"
 
 ortools_datas, ortools_binaries, ortools_hiddenimports = collect_all("ortools")
 reportlab_datas, reportlab_binaries, reportlab_hiddenimports = collect_all("reportlab")
-openpyxl_hiddenimports = collect_submodules("openpyxl")
+openpyxl_datas, openpyxl_binaries, openpyxl_hiddenimports = collect_all("openpyxl")
 
 datas = [
     (str(RESOURCES_DIR), "resources"),
     *ortools_datas,
     *reportlab_datas,
+    *openpyxl_datas,
 ]
 
 binaries = [
     *ortools_binaries,
     *reportlab_binaries,
+    *openpyxl_binaries,
 ]
 
 hiddenimports = [
     *ortools_hiddenimports,
     *reportlab_hiddenimports,
     *openpyxl_hiddenimports,
+    "et_xmlfile",
     "PySide6.QtCore",
     "PySide6.QtGui",
     "PySide6.QtWidgets",
@@ -47,14 +48,11 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter", "unittest", "pytest"],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
+    excludes=["tkinter", "pytest", "_pytest"],
     noarchive=False,
 )
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+pyz = PYZ(a.pure)
 
 exe = EXE(
     pyz,
@@ -78,7 +76,6 @@ exe = EXE(
 coll = COLLECT(
     exe,
     a.binaries,
-    a.zipfiles,
     a.datas,
     strip=False,
     upx=False,

@@ -105,7 +105,10 @@ def get_resource_root() -> Path:
     """Return the root directory for bundled static resources (dev and PyInstaller)."""
     frozen_root = getattr(sys, "_MEIPASS", None)
     if frozen_root:
-        return Path(frozen_root) / "resources"
+        meipass_resources = Path(frozen_root) / "resources"
+        if meipass_resources.exists():
+            return meipass_resources
+        return Path(sys.executable).resolve().parent / "resources"
     return Path(__file__).resolve().parents[2] / "resources"
 
 

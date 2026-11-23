@@ -35,3 +35,12 @@ def test_missing_dependency_raises_explicit_error(monkeypatch: pytest.MonkeyPatc
     service = StartupService()
     with pytest.raises(DependencyVerificationError, match="ReportLab"):
         service.verify_dependencies(raise_on_error=True)
+
+
+def test_startup_service_run_diagnostics() -> None:
+    report = StartupService().run_diagnostics()
+
+    assert len(report.dependencies) == len(REQUIRED_DEPENDENCIES)
+    assert all(dep.available for dep in report.dependencies)
+    assert report.solver_result.status_name == "OPTIMAL"
+    assert report.solver_result.objective_value == 15

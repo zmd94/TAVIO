@@ -51,7 +51,14 @@ try {
         throw "Expected executable was not generated at $ExePath"
     }
 
+    $InternalQss = Join-Path $ProjectRoot "dist\TAVIO\_internal\resources\styles\main.qss"
+    $RootQss = Join-Path $ProjectRoot "dist\TAVIO\resources\styles\main.qss"
+    if (-not ((Test-Path $InternalQss) -or (Test-Path $RootQss))) {
+        throw "Bundled stylesheet resource (main.qss) was not found in dist\TAVIO."
+    }
+
     Write-Host "Build succeeded: $ExePath" -ForegroundColor Green
+    Write-Host "Next step: launch '$ExePath' manually to verify GUI, single-instance lock, and CP-SAT execution." -ForegroundColor Cyan
 }
 finally {
     Pop-Location

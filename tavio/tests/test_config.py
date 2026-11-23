@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,10 +12,14 @@ from tavio.config import (
     APP_NAME,
     DB_FILENAME,
     ENV_DATA_DIR_OVERRIDE,
+    ConfigurationError,
     build_app_paths,
     ensure_app_directories,
+    get_resource_path,
+    get_resource_root,
     resolve_base_data_dir,
 )
+from tavio.logging_setup import configure_logging
 
 
 def test_resolve_base_data_dir_uses_windows_localappdata(tmp_path: Path) -> None:
@@ -60,6 +66,14 @@ def test_build_and_ensure_app_directories(isolated_tavio_dir: Path) -> None:
     assert APP_NAME == "TAVIO"
 
 
+def test_ensure_app_directories_raises_on_unwritable_path(tmp_path: Path) -> None:
+    blocking_file = tmp_path / "not_a_directory"
+    blocking_file.write_text("occupied", encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="Failed to create TAVIO directory"):
+        ensure_app_directories(build_app_paths(blocking_file))
+
+
 def test_project_identity_constants() -> None:
     paths = build_app_paths()
     assert paths.base_dir.name == "TAVIO"
@@ -74,3 +88,36 @@ def test_whitespace_localappdata_falls_back_cleanly(
     env = {**bad_env, "USERPROFILE": str(tmp_path)}
     resolved = resolve_base_data_dir(env=env, platform="win32")
     assert resolved == tmp_path.resolve() / "AppData" / "Local" / "TAVIO"
+
+
+def test_get_resource_path_resolves_stylesheet_in_source_tree() -> None:
+    qss_path = get_resource_path("styles", "main.qss")
+    assert qss_path.is_file()
+
+
+def test_get_resource_root_prefers_meipass_resources_when_frozen(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    meipass_dir = tmp_path / "_internal"
+    (meipass_dir / "resources").mkdir(parents=True)
+    monkeypatch.setattr(sys, "_MEIPASS", str(meipass_dir), raising=False)
+
+    assert get_resource_root() == meipass_dir / "resources"
+
+
+def test_configure_logging_writes_log_file(isolated_tavio_dir: Path) -> None:
+    paths = ensure_app_directories(build_app_paths())
+    logger = configure_logging(paths.log_file_path)
+    logger.info("Phase 0 logging check")
+
+    for handler in list(logging.getLogger().handlers):
+        handler.flush()
+
+    content = paths.log_file_path.read_text(encoding="utf-8")
+    assert "Logging initialized" in content
+    assert "Phase 0 logging check" in content
+
+    for handler in list(logging.getLogger().handlers):
+        logging.getLogger().removeHandler(handler)
+        handler.close()

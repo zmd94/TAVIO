@@ -8,7 +8,6 @@ version = "0.1.0"
 description = "TAVIO (Timetable Administration & Validation Intelligent Organizer) - Offline-first school timetable and teacher relief management system for Malaysian schools."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
-license = { text = "MIT" }
 authors = [
     { name = "TAVIO Contributors" }
 ]
