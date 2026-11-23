@@ -24,7 +24,7 @@ from tavio.ui.main_window import MainWindow
 
 logger = logging.getLogger(__name__)
 
-STALE_LOCK_TIMEOUT_MS = 30_000
+STALE_LOCK_TIMEOUT_MS = 0
 LOCK_TRY_TIMEOUT_MS = 100
 
 
@@ -34,14 +34,14 @@ def acquire_single_instance_lock(
     stale_lock_timeout_ms: int = STALE_LOCK_TIMEOUT_MS,
     try_timeout_ms: int = LOCK_TRY_TIMEOUT_MS,
 ) -> tuple[QLockFile, bool]:
-    """Create and attempt to acquire a QLockFile for single-instance protection.
+    """Create and attempt to acquire a long-lived QLockFile for single-instance protection.
 
-    Uses a positive ``stale_lock_timeout_ms`` so Qt can safely recover locks left behind
-    by a terminated/crashed process without manual unsafe file deletion, while still
-    blocking a second concurrent instance while a live process holds the lock.
+    Per Qt QLockFile guidance for long-running desktop applications, ``setStaleLockTime(0)``
+    disables time-based stale expiration so an active session open for hours cannot be
+    treated as stale, while a short ``tryLock`` timeout rejects a second instance promptly.
     """
-    if stale_lock_timeout_ms <= 0:
-        raise ValueError("stale_lock_timeout_ms must be > 0 so stale locks can recover safely.")
+    if stale_lock_timeout_ms < 0:
+        raise ValueError("stale_lock_timeout_ms must be >= 0.")
 
     lock_file = QLockFile(str(lock_file_path))
     lock_file.setStaleLockTime(stale_lock_timeout_ms)
