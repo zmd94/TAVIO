@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
 
-PROJECT_ROOT = Path(SPECPATH).resolve().parent.parent
+PROJECT_ROOT = Path(SPECPATH).resolve()
 SRC_ROOT = PROJECT_ROOT / "src"
 RESOURCES_DIR = PROJECT_ROOT / "resources"
 ASSETS_DIR = PROJECT_ROOT / "assets"
