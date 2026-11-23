@@ -7,10 +7,10 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
 
-PROJECT_ROOT = Path(SPECPATH).resolve()
+PROJECT_ROOT = Path(SPECPATH).resolve().parent
 SRC_ROOT = PROJECT_ROOT / "src"
 RESOURCES_DIR = PROJECT_ROOT / "resources"
-ASSETS_DIR = PROJECT_ROOT / "assets"
+ASSETS_DIR = PROJECT_ROOT / "packaging" / "assets"
 ICON_PATH = ASSETS_DIR / "TAVIO.ico"
 
 if not ASSETS_DIR.is_dir():
