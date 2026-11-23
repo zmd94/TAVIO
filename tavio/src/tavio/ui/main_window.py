@@ -220,7 +220,7 @@ class MainWindow(QMainWindow):
         card.setObjectName("Card")
         card_layout = QVBoxLayout(card)
         notice = QLabel(
-            "Not yet implemented in Phase 0.\\n\\n"
+            "Not yet implemented in Phase 0.\n\n"
             f"Planned scope: {description}"
         )
         notice.setWordWrap(True)

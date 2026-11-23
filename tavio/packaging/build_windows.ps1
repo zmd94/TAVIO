@@ -48,32 +48,32 @@ try {
     }
 
     Write-Host "Running PyInstaller (--onedir)..." -ForegroundColor Yellow
-    python -m PyInstaller --noconfirm --clean packaging\\tavio.spec
+    python -m PyInstaller --noconfirm --clean packaging\tavio.spec
     if ($LASTEXITCODE -ne 0) {
         throw "PyInstaller build failed."
     }
 
-    $ExePath = Join-Path $ProjectRoot "dist\\TAVIO\\TAVIO.exe"
+    $ExePath = Join-Path $ProjectRoot "dist\TAVIO\TAVIO.exe"
     if (-not (Test-Path $ExePath)) {
         throw "Expected executable was not generated at $ExePath"
     }
 
-    $InternalQss = Join-Path $ProjectRoot "dist\\TAVIO\\_internal\\resources\\styles\\main.qss"
-    $RootQss = Join-Path $ProjectRoot "dist\\TAVIO\\resources\\styles\\main.qss"
+    $InternalQss = Join-Path $ProjectRoot "dist\TAVIO\_internal\resources\styles\main.qss"
+    $RootQss = Join-Path $ProjectRoot "dist\TAVIO\resources\styles\main.qss"
     if (-not ((Test-Path $InternalQss) -or (Test-Path $RootQss))) {
-        throw "Bundled stylesheet resource (main.qss) was not found in dist\\TAVIO."
+        throw "Bundled stylesheet resource (main.qss) was not found in dist\TAVIO."
     }
 
-    $BundledIcon = Join-Path $ProjectRoot "dist\\TAVIO\\_internal\\resources\\assets\\TAVIO_icon.png"
-    $BundledLogo = Join-Path $ProjectRoot "dist\\TAVIO\\_internal\\resources\\assets\\TAVIO_icon_vertical.png"
-    $RootBundledIcon = Join-Path $ProjectRoot "dist\\TAVIO\\resources\\assets\\TAVIO_icon.png"
-    $RootBundledLogo = Join-Path $ProjectRoot "dist\\TAVIO\\resources\\assets\\TAVIO_icon_vertical.png"
+    $BundledIcon = Join-Path $ProjectRoot "dist\TAVIO\_internal\resources\assets\TAVIO_icon.png"
+    $BundledLogo = Join-Path $ProjectRoot "dist\TAVIO\_internal\resources\assets\TAVIO_icon_vertical.png"
+    $RootBundledIcon = Join-Path $ProjectRoot "dist\TAVIO\resources\assets\TAVIO_icon.png"
+    $RootBundledLogo = Join-Path $ProjectRoot "dist\TAVIO\resources\assets\TAVIO_icon_vertical.png"
 
     if (-not ((Test-Path $BundledIcon) -or (Test-Path $RootBundledIcon))) {
-        throw "Bundled application icon (TAVIO_icon.png) was not found in dist\\TAVIO."
+        throw "Bundled application icon (TAVIO_icon.png) was not found in dist\TAVIO."
     }
     if (-not ((Test-Path $BundledLogo) -or (Test-Path $RootBundledLogo))) {
-        throw "Bundled vertical logo (TAVIO_icon_vertical.png) was not found in dist\\TAVIO."
+        throw "Bundled vertical logo (TAVIO_icon_vertical.png) was not found in dist\TAVIO."
     }
 
     Write-Host "Build succeeded: $ExePath" -ForegroundColor Green

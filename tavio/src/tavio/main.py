@@ -104,7 +104,7 @@ def main() -> int:
         QMessageBox.warning(
             None,
             f"{APP_NAME} Already Running",
-            f"{APP_NAME} ({APP_FULL_NAME}) is already open.\\n\\n"
+            f"{APP_NAME} ({APP_FULL_NAME}) is already open.\n\n"
             "Only one running instance is allowed to protect local data.",
         )
         return 1
@@ -120,7 +120,7 @@ def main() -> int:
             QMessageBox.critical(
                 None,
                 f"{APP_NAME} Startup Verification Error",
-                f"{APP_NAME} failed required startup checks:\\n\\n{exc}\\n\\n"
+                f"{APP_NAME} failed required startup checks:\n\n{exc}\n\n"
                 f"Check log file: {paths.log_file_path}",
             )
             return 1

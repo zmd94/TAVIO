@@ -15,6 +15,7 @@ from tavio.config import (
     ConfigurationError,
     build_app_paths,
     ensure_app_directories,
+    get_asset_path,
     get_resource_path,
     get_resource_root,
     resolve_base_data_dir,
@@ -93,6 +94,12 @@ def test_whitespace_localappdata_falls_back_cleanly(
 def test_get_resource_path_resolves_stylesheet_in_source_tree() -> None:
     qss_path = get_resource_path("styles", "main.qss")
     assert qss_path.is_file()
+
+
+def test_get_asset_path_resolves_all_branding_assets_from_source_tree() -> None:
+    for filename in ("TAVIO.ico", "TAVIO_icon.png", "TAVIO_icon_vertical.png"):
+        asset_path = get_asset_path(filename)
+        assert asset_path.is_file(), f"Missing branding asset: {filename}"
 
 
 def test_get_resource_root_prefers_meipass_resources_when_frozen(
