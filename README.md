@@ -75,14 +75,25 @@ TAVIO is in early foundational development. Core scheduling, database persistenc
 .
 ├── LICENSE                  # PolyForm Noncommercial License 1.0.0 + Required Notice
 ├── README.md                # Main project overview and usage policy
-└── tavio/                   # Authoritative Python desktop application
-    ├── pyproject.toml       # Python metadata, dependencies, pytest & Ruff config
-    ├── README.md            # Technical setup, test, and Windows build documentation
-    ├── packaging/           # PyInstaller .spec and PowerShell build script
-    ├── resources/           # Stylesheets, icons, and fonts
-    ├── src/tavio/           # Modular application source code
-    └── tests/               # Automated pytest suite
+├── tavio/                   # Authoritative Python/PySide6 Windows desktop codebase
+│   ├── pyproject.toml       # Python metadata, dependencies, pytest & Ruff config
+│   ├── README.md            # Technical setup, test, and Windows build documentation
+│   ├── packaging/           # PyInstaller .spec and PowerShell build script
+│   ├── resources/           # Stylesheets, icons, and fonts
+│   ├── src/tavio/           # Modular desktop application source code
+│   └── tests/               # Automated pytest suite
+├── package.json             # Existing root React/Vite scaffold (not part of desktop app)
+├── index.html               # Existing root web entry scaffold
+├── src/                     # Existing root React/Vite scaffold sources
+├── vite.config.ts           # Existing Vite configuration
+├── tsconfig.json            # Existing TypeScript configuration
+├── metadata.json            # Existing root template metadata
+├── .env.example             # Existing root environment template
+├── .gitignore
+└── bun.lock
 ```
+
+> **Codebase Note:** The Python and PySide6 project inside [`tavio/`](tavio/README.md) is the authoritative codebase for the TAVIO Windows desktop application. The React/Vite scaffold files at the repository root (`package.json`, `index.html`, `src/`, `vite.config.ts`, `tsconfig.json`, `metadata.json`, `.env.example`) are inherited workspace template/prototype files and are **not** part of or a dependency of the official TAVIO desktop application; they are retained untouched as their future disposition in the repository has not yet been finalized.
 
 ---
 
@@ -114,7 +125,9 @@ TAVIO is distributed as **Source-Available Software** under the **[PolyForm Nonc
 Full license terms are available in **[LICENSE](LICENSE)** and at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
 ### Permitted Uses
-Under the PolyForm Noncommercial License 1.0.0, TAVIO may be used without separate fee or commercial agreement for:
+Educational institutions are permitted to use TAVIO under the PolyForm Noncommercial License 1.0.0, regardless of their funding sources, subject to the license terms.
+
+Under the PolyForm Noncommercial License 1.0.0, permitted uses include:
 - **Educational institutions**, including government/public and private schools, regardless of funding source (`Noncommercial Organizations` section).
 - **Noncommercial purposes** (`Noncommercial Purposes` section).
 - **Personal study, learning, research, experimentation, and testing** without anticipated commercial application (`Personal Uses` section).
