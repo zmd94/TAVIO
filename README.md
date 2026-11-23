@@ -89,8 +89,7 @@ TAVIO is in early foundational development. Core scheduling, database persistenc
 ├── tsconfig.json            # Existing TypeScript configuration
 ├── metadata.json            # Existing root template metadata
 ├── .env.example             # Existing root environment template
-├── .gitignore
-└── bun.lock
+└── .gitignore
 ```
 
 > **Codebase Note:** The Python and PySide6 project inside [`tavio/`](tavio/README.md) is the authoritative codebase for the TAVIO Windows desktop application. The React/Vite scaffold files at the repository root (`package.json`, `index.html`, `src/`, `vite.config.ts`, `tsconfig.json`, `metadata.json`, `.env.example`) are inherited workspace template/prototype files and are **not** part of or a dependency of the official TAVIO desktop application; they are retained untouched as their future disposition in the repository has not yet been finalized.
