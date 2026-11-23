@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from tavio import __version__
-from tavio.config import APP_FULL_NAME, APP_NAME, AppPaths
+from tavio.config import APP_FULL_NAME, APP_NAME, AppPaths, get_asset_path
 from tavio.services.startup_service import StartupDiagnosticReport, StartupService
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{APP_NAME} — {APP_FULL_NAME}")
         self.setMinimumSize(1020, 660)
 
+        icon_path = get_asset_path("TAVIO_icon.png")
+        if icon_path.is_file():
+            self.setWindowIcon(QIcon(str(icon_path)))
+        else:
+            logger.warning("Window icon not found at %s.", icon_path)
+
         self._nav_list = QListWidget()
         self._stack = QStackedWidget()
         self._solver_summary_label = QLabel()
@@ -79,10 +86,36 @@ class MainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(14, 18, 14, 18)
         sidebar_layout.setSpacing(12)
 
+        brand_row = QHBoxLayout()
+        brand_row.setSpacing(10)
+
+        brand_icon = QLabel()
+        brand_icon_path = get_asset_path("TAVIO_icon.png")
+        if brand_icon_path.is_file():
+            pixmap = QPixmap(str(brand_icon_path))
+            brand_icon.setPixmap(
+                pixmap.scaled(
+                    42,
+                    42,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            brand_icon.setFixedSize(46, 46)
+        else:
+            logger.warning("Sidebar brand icon not found at %s.", brand_icon_path)
+
+        brand_text = QVBoxLayout()
+        brand_text.setSpacing(2)
         brand_label = QLabel(APP_NAME)
         brand_label.setObjectName("BrandTitle")
         subtitle_label = QLabel("Timetable & Relief System")
         subtitle_label.setObjectName("BrandSubtitle")
+        brand_text.addWidget(brand_label)
+        brand_text.addWidget(subtitle_label)
+
+        brand_row.addWidget(brand_icon, 0, Qt.AlignmentFlag.AlignVCenter)
+        brand_row.addLayout(brand_text, 1)
 
         self._nav_list.setObjectName("NavigationList")
         self._nav_list.addItem(QListWidgetItem("System Overview (Phase 0)"))
@@ -91,8 +124,7 @@ class MainWindow(QMainWindow):
 
         self._nav_list.currentRowChanged.connect(self._stack.setCurrentIndex)
 
-        sidebar_layout.addWidget(brand_label)
-        sidebar_layout.addWidget(subtitle_label)
+        sidebar_layout.addLayout(brand_row)
         sidebar_layout.addWidget(self._nav_list, 1)
 
         # Main content stack
@@ -188,7 +220,7 @@ class MainWindow(QMainWindow):
         card.setObjectName("Card")
         card_layout = QVBoxLayout(card)
         notice = QLabel(
-            "Not yet implemented in Phase 0.\n\n"
+            "Not yet implemented in Phase 0.\\n\\n"
             f"Planned scope: {description}"
         )
         notice.setWordWrap(True)

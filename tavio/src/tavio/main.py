@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QLockFile
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from tavio import __version__
@@ -16,6 +17,7 @@ from tavio.config import (
     ConfigurationError,
     build_app_paths,
     ensure_app_directories,
+    get_asset_path,
     get_resource_path,
 )
 from tavio.logging_setup import configure_logging
@@ -82,6 +84,12 @@ def main() -> int:
     app.setApplicationDisplayName(APP_NAME)
     app.setOrganizationName(APP_NAME)
 
+    app_icon_path = get_asset_path("TAVIO_icon.png")
+    if app_icon_path.is_file():
+        app.setWindowIcon(QIcon(str(app_icon_path)))
+    else:
+        logger.warning("Application icon not found at %s.", app_icon_path)
+
     lock_file, acquired = acquire_single_instance_lock(paths.lock_file_path)
     if not acquired:
         pid, hostname, appname = lock_file.getLockInfo()
@@ -96,7 +104,7 @@ def main() -> int:
         QMessageBox.warning(
             None,
             f"{APP_NAME} Already Running",
-            f"{APP_NAME} ({APP_FULL_NAME}) is already open.\n\n"
+            f"{APP_NAME} ({APP_FULL_NAME}) is already open.\\n\\n"
             "Only one running instance is allowed to protect local data.",
         )
         return 1
@@ -112,7 +120,7 @@ def main() -> int:
             QMessageBox.critical(
                 None,
                 f"{APP_NAME} Startup Verification Error",
-                f"{APP_NAME} failed required startup checks:\n\n{exc}\n\n"
+                f"{APP_NAME} failed required startup checks:\\n\\n{exc}\\n\\n"
                 f"Check log file: {paths.log_file_path}",
             )
             return 1

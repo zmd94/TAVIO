@@ -10,7 +10,18 @@ from PyInstaller.utils.hooks import collect_all
 PROJECT_ROOT = Path(SPECPATH).resolve().parent
 SRC_ROOT = PROJECT_ROOT / "src"
 RESOURCES_DIR = PROJECT_ROOT / "resources"
-ICON_PATH = RESOURCES_DIR / "icons" / "tavio.ico"
+ASSETS_DIR = PROJECT_ROOT / "assets"
+ICON_PATH = ASSETS_DIR / "TAVIO.ico"
+
+if not ASSETS_DIR.is_dir():
+    raise FileNotFoundError(f"TAVIO branding assets directory not found: {ASSETS_DIR}")
+
+required_assets = ("TAVIO.ico", "TAVIO_icon.png", "TAVIO_icon_vertical.png")
+missing_assets = [name for name in required_assets if not (ASSETS_DIR / name).is_file()]
+if missing_assets:
+    raise FileNotFoundError(
+        "Missing required TAVIO branding assets: " + ", ".join(missing_assets)
+    )
 
 ortools_datas, ortools_binaries, ortools_hiddenimports = collect_all("ortools")
 reportlab_datas, reportlab_binaries, reportlab_hiddenimports = collect_all("reportlab")
@@ -18,6 +29,7 @@ openpyxl_datas, openpyxl_binaries, openpyxl_hiddenimports = collect_all("openpyx
 
 datas = [
     (str(RESOURCES_DIR), "resources"),
+    (str(ASSETS_DIR), "resources/assets"),
     *ortools_datas,
     *reportlab_datas,
     *openpyxl_datas,
@@ -70,7 +82,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(ICON_PATH) if ICON_PATH.is_file() else None,
+    icon=str(ICON_PATH),
 )
 
 coll = COLLECT(

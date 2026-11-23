@@ -115,3 +115,21 @@ def get_resource_root() -> Path:
 def get_resource_path(*parts: str) -> Path:
     """Resolve a path inside the TAVIO resources directory."""
     return get_resource_root().joinpath(*parts)
+
+
+def get_asset_path(filename: str) -> Path:
+    """Resolve a branded asset in both source and PyInstaller environments.
+
+    PyInstaller bundles packaging/assets into resources/assets. During source
+    development, assets remain in packaging/assets in the project directory.
+    """
+    bundled_path = get_resource_path("assets", filename)
+    if bundled_path.is_file():
+        return bundled_path
+
+    project_root = Path(__file__).resolve().parents[2]
+    source_path = project_root / "packaging" / "assets" / filename
+    if source_path.is_file():
+        return source_path
+
+    return bundled_path
