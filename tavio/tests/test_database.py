@@ -44,12 +44,9 @@ def test_initialize_with_empty_migrations_starts_at_version_zero(tmp_path: Path)
     assert tables == []
 
 
-def test_initialize_applies_default_v1_schema_and_seeds(tmp_path: Path) -> None:
-    db_path = tmp_path / "tavio.db"
-    manager = DatabaseManager(db_path)
-
-    assert len(DEFAULT_MIGRATIONS) == 1
-    assert DEFAULT_MIGRATIONS[0].version == 1
+def test_initialize_applies_v1_schema_and_seeds(tmp_path: Path) -> None:
+    db_path = tmp_path / "tavio_v1.db"
+    manager = DatabaseManager(db_path, migrations=(DEFAULT_MIGRATIONS[0],))
 
     result = manager.initialize()
 
@@ -102,6 +99,76 @@ def test_initialize_applies_default_v1_schema_and_seeds(tmp_path: Path) -> None:
     assert second_result.applied_versions == ()
 
 
+def test_initialize_applies_default_migrations_from_zero_to_v2(tmp_path: Path) -> None:
+    db_path = tmp_path / "tavio.db"
+    manager = DatabaseManager(db_path)
+
+    assert [m.version for m in DEFAULT_MIGRATIONS] == [1, 2]
+
+    result = manager.initialize()
+
+    assert db_path.is_file()
+    assert result.initial_version == 0
+    assert result.final_version == 2
+    assert result.applied_versions == (1, 2)
+    assert manager.supported_version == 2
+    assert manager.get_schema_version() == 2
+
+    with manager.connection() as conn:
+        tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        custom_indexes = [
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        ]
+        triggers = [
+            row["name"]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+        ]
+        fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        school_profile_cols = {
+            row["name"]: row for row in conn.execute("PRAGMA table_info(school_profile)").fetchall()
+        }
+        admin_rows = conn.execute("SELECT * FROM school_administrators").fetchall()
+        signatory_rows = conn.execute(
+            "SELECT schedule_type, prepared_by_administrator_id, verified_by_administrator_id "
+            "FROM schedule_signatory_settings ORDER BY schedule_type"
+        ).fetchall()
+
+    assert len(tables) == 44
+    assert {"school_administrators", "schedule_signatory_settings"}.issubset(tables)
+    assert len(custom_indexes) == 45
+    assert sum(1 for name in custom_indexes if name.startswith("uq_")) == 23
+    assert sum(1 for name in custom_indexes if name.startswith("idx_")) == 22
+    assert len(triggers) == 64
+    assert fk_violations == []
+    assert "logo_path" in school_profile_cols
+    assert school_profile_cols["logo_path"]["notnull"] == 0
+    assert school_profile_cols["logo_path"]["type"] == "TEXT"
+    assert "principal_name" in school_profile_cols
+    assert admin_rows == []
+    assert [(r["schedule_type"], r["prepared_by_administrator_id"], r["verified_by_administrator_id"]) for r in signatory_rows] == [
+        ("CLASS", None, None),
+        ("SPECIAL_ROOM", None, None),
+        ("TEACHER", None, None),
+    ]
+
+    second_result = manager.initialize()
+    assert second_result.initial_version == 2
+    assert second_result.final_version == 2
+    assert second_result.applied_versions == ()
+
+    with manager.connection() as conn:
+        count_after = conn.execute("SELECT COUNT(*) FROM schedule_signatory_settings").fetchone()[0]
+    assert count_after == 3
+
+
 def test_initialize_integrates_with_app_paths(isolated_tavio_dir: Path) -> None:
     paths = ensure_app_directories(build_app_paths())
     manager = DatabaseManager.from_app_paths(paths)
@@ -110,8 +177,8 @@ def test_initialize_integrates_with_app_paths(isolated_tavio_dir: Path) -> None:
 
     assert manager.db_path == paths.db_path.resolve()
     assert paths.db_path.is_file()
-    assert result.final_version == 1
-    assert result.applied_versions == (1,)
+    assert result.final_version == 2
+    assert result.applied_versions == (1, 2)
 
 
 def test_parent_directories_are_created_automatically(tmp_path: Path) -> None:
@@ -381,13 +448,13 @@ def test_connections_are_closed_after_normal_and_error_exits(tmp_path: Path) -> 
     manager.initialize()
 
     with manager.connection() as conn:
-        assert get_schema_version(conn) == 1
+        assert get_schema_version(conn) == 2
 
     with pytest.raises(sqlite3.ProgrammingError, match="closed"):
         conn.execute("SELECT 1")
 
     with pytest.raises(ValueError, match="trigger"), manager.connection() as err_conn:
-        assert get_schema_version(err_conn) == 1
+        assert get_schema_version(err_conn) == 2
         raise ValueError("trigger")
 
     with pytest.raises(sqlite3.ProgrammingError, match="closed"):
@@ -688,10 +755,310 @@ def test_relief_teacher_id_composite_fk_enforces_same_year_and_session(tmp_path:
         )
 
 
+def test_v1_to_v2_upgrade_preserves_data_and_backfills_principal_name(tmp_path: Path) -> None:
+    db_path = tmp_path / "upgrade_v1_to_v2.db"
+    v1_manager = DatabaseManager(db_path, migrations=(DEFAULT_MIGRATIONS[0],))
+    v1_manager.initialize()
+
+    with v1_manager.transaction() as conn:
+        conn.execute(
+            """
+            INSERT INTO school_profile (
+                id, school_name, school_code, school_week_group,
+                address, phone, email, principal_name
+            ) VALUES (
+                1, 'SK Seri Melati', 'BBA1001', 'B',
+                'Jalan Melati 1', '03-12345678', 'bba1001@moe.edu.my', 'Puan Aminah binti Ahmad'
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO academic_years (id, year_code, name, start_date, end_date) "
+            "VALUES (1, '2026', 'Tahun 2026', '2026-01-01', '2026-12-31')"
+        )
+        conn.execute(
+            "INSERT INTO school_sessions (id, academic_year_id, session_code, name, sort_order) "
+            "VALUES (1, 1, 'PAGI', 'Sesi Pagi', 1)"
+        )
+        conn.execute(
+            "INSERT INTO teachers (id, short_name, full_name) VALUES (1, 'CIKGU A', 'Ahmad bin Ali')"
+        )
+
+    v2_manager = DatabaseManager(db_path)
+    upgrade_result = v2_manager.initialize()
+
+    assert upgrade_result.initial_version == 1
+    assert upgrade_result.final_version == 2
+    assert upgrade_result.applied_versions == (2,)
+    assert v2_manager.get_schema_version() == 2
+
+    with v2_manager.connection() as conn:
+        tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        custom_indexes = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+        triggers = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+        ).fetchall()
+        assert len(tables) == 44
+        assert len(custom_indexes) == 45
+        assert len(triggers) == 64
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+
+        profile = conn.execute("SELECT * FROM school_profile WHERE id = 1").fetchone()
+        assert profile is not None
+        assert profile["school_name"] == "SK Seri Melati"
+        assert profile["school_code"] == "BBA1001"
+        assert profile["school_week_group"] == "B"
+        assert profile["address"] == "Jalan Melati 1"
+        assert profile["phone"] == "03-12345678"
+        assert profile["email"] == "bba1001@moe.edu.my"
+        assert profile["principal_name"] == "Puan Aminah binti Ahmad"
+        assert profile["logo_path"] is None
+
+        year_row = conn.execute("SELECT year_code, name FROM academic_years WHERE id = 1").fetchone()
+        teacher_row = conn.execute("SELECT short_name, full_name FROM teachers WHERE id = 1").fetchone()
+        assert (year_row["year_code"], year_row["name"]) == ("2026", "Tahun 2026")
+        assert (teacher_row["short_name"], teacher_row["full_name"]) == ("CIKGU A", "Ahmad bin Ali")
+
+        admins = conn.execute(
+            "SELECT position_title, administrator_name, sort_order, is_active FROM school_administrators"
+        ).fetchall()
+        assert len(admins) == 1
+        assert (
+            admins[0]["position_title"],
+            admins[0]["administrator_name"],
+            admins[0]["sort_order"],
+            admins[0]["is_active"],
+        ) == ("Guru Besar", "Puan Aminah binti Ahmad", 1, 1)
+
+        signatories = conn.execute(
+            "SELECT schedule_type, prepared_by_administrator_id, verified_by_administrator_id "
+            "FROM schedule_signatory_settings ORDER BY schedule_type"
+        ).fetchall()
+        assert [
+            (r["schedule_type"], r["prepared_by_administrator_id"], r["verified_by_administrator_id"])
+            for r in signatories
+        ] == [
+            ("CLASS", None, None),
+            ("SPECIAL_ROOM", None, None),
+            ("TEACHER", None, None),
+        ]
+
+    # Repeated initialization must remain idempotent with zero duplicate backfill or seed records.
+    repeat_result = v2_manager.initialize()
+    assert repeat_result.applied_versions == ()
+    with v2_manager.connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM school_administrators").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM schedule_signatory_settings").fetchone()[0] == 3
+
+        # Verify logo_path can hold a relative path and revert back to NULL cleanly.
+        conn.execute("UPDATE school_profile SET logo_path = 'assets/school_logo.png' WHERE id = 1")
+        assert (
+            conn.execute("SELECT logo_path FROM school_profile WHERE id = 1").fetchone()["logo_path"]
+            == "assets/school_logo.png"
+        )
+        conn.execute("UPDATE school_profile SET logo_path = NULL WHERE id = 1")
+        assert conn.execute("SELECT logo_path FROM school_profile WHERE id = 1").fetchone()["logo_path"] is None
+
+
+@pytest.mark.parametrize("blank_principal", [None, "", "   "])
+def test_v2_migration_skips_backfill_when_principal_name_empty_or_null(
+    tmp_path: Path,
+    blank_principal: str | None,
+) -> None:
+    db_path = tmp_path / "blank_principal.db"
+    v1_manager = DatabaseManager(db_path, migrations=(DEFAULT_MIGRATIONS[0],))
+    v1_manager.initialize()
+
+    with v1_manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO school_profile (id, school_name, school_code, principal_name) "
+            "VALUES (1, 'SK Kosong', 'BBA0001', ?)",
+            (blank_principal,),
+        )
+
+    v2_manager = DatabaseManager(db_path)
+    result = v2_manager.initialize()
+    assert result.applied_versions == (2,)
+
+    with v2_manager.connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM school_administrators").fetchone()[0] == 0
+        assert (
+            conn.execute("SELECT principal_name FROM school_profile WHERE id = 1").fetchone()[
+                "principal_name"
+            ]
+            == blank_principal
+        )
+        assert conn.execute("SELECT COUNT(*) FROM schedule_signatory_settings").fetchone()[0] == 3
+
+
+def test_v2_backfill_seed_sql_does_not_create_duplicate_administrators(tmp_path: Path) -> None:
+    from tavio.database.schema_v2 import SEED_V2_SQL
+
+    db_path = tmp_path / "no_dup_backfill.db"
+    manager = DatabaseManager(db_path)
+    manager.initialize()
+
+    with manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO school_profile (id, school_name, school_code, principal_name) "
+            "VALUES (1, 'SK Uji', 'BBA2002', 'Encik Razak bin Hassan')"
+        )
+        for statement in split_sql_statements(SEED_V2_SQL):
+            conn.execute(statement)
+        # Running SEED_V2_SQL a second time must not duplicate either administrators or signatory rows.
+        for statement in split_sql_statements(SEED_V2_SQL):
+            conn.execute(statement)
+
+        admins = conn.execute(
+            "SELECT position_title, administrator_name FROM school_administrators"
+        ).fetchall()
+        signatories_count = conn.execute(
+            "SELECT COUNT(*) FROM schedule_signatory_settings"
+        ).fetchone()[0]
+
+    assert len(admins) == 1
+    assert (admins[0]["position_title"], admins[0]["administrator_name"]) == (
+        "Guru Besar",
+        "Encik Razak bin Hassan",
+    )
+    assert signatories_count == 3
+
+
+def test_v2_signatory_foreign_keys_and_on_delete_restrict(tmp_path: Path) -> None:
+    db_path = tmp_path / "signatory_fk.db"
+    manager = DatabaseManager(db_path)
+    manager.initialize()
+
+    with manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO school_administrators (id, position_title, administrator_name, sort_order) "
+            "VALUES (1, 'Guru Besar', 'Encik Ahmad', 1), "
+            "(2, 'GPK Pentadbiran', 'Puan Salmah', 2), "
+            "(3, 'GPK HEM', 'Encik Lim', 3)"
+        )
+        # Same administrator allowed as both prepared_by and verified_by.
+        conn.execute(
+            "UPDATE schedule_signatory_settings "
+            "SET prepared_by_administrator_id = 1, verified_by_administrator_id = 1 "
+            "WHERE schedule_type = 'TEACHER'"
+        )
+        # Distinct administrators allowed for prepared_by and verified_by.
+        conn.execute(
+            "UPDATE schedule_signatory_settings "
+            "SET prepared_by_administrator_id = 2, verified_by_administrator_id = 3 "
+            "WHERE schedule_type = 'CLASS'"
+        )
+        # SPECIAL_ROOM uses administrator 3 as prepared_by only.
+        conn.execute(
+            "UPDATE schedule_signatory_settings "
+            "SET prepared_by_administrator_id = 3, verified_by_administrator_id = NULL "
+            "WHERE schedule_type = 'SPECIAL_ROOM'"
+        )
+
+    # Invalid administrator references must be rejected for both columns.
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"), manager.transaction() as conn:
+        conn.execute(
+            "UPDATE schedule_signatory_settings SET prepared_by_administrator_id = 999 "
+            "WHERE schedule_type = 'TEACHER'"
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"), manager.transaction() as conn:
+        conn.execute(
+            "UPDATE schedule_signatory_settings SET verified_by_administrator_id = 999 "
+            "WHERE schedule_type = 'TEACHER'"
+        )
+
+    # Invalid schedule_type and empty administrator fields must be rejected by CHECK constraints.
+    with pytest.raises(sqlite3.IntegrityError), manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO schedule_signatory_settings (schedule_type) VALUES ('INVALID')"
+        )
+    with pytest.raises(sqlite3.IntegrityError), manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO school_administrators (position_title, administrator_name) VALUES ('   ', 'Nama')"
+        )
+    with pytest.raises(sqlite3.IntegrityError), manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO school_administrators (position_title, administrator_name) VALUES ('PK', '   ')"
+        )
+
+    # ON DELETE RESTRICT blocks deleting administrator referenced by prepared_by_administrator_id (id=2).
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"), manager.transaction() as conn:
+        conn.execute("DELETE FROM school_administrators WHERE id = 2")
+
+    # ON DELETE RESTRICT blocks deleting administrator referenced by verified_by_administrator_id (id=3 via CLASS).
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"), manager.transaction() as conn:
+        conn.execute("DELETE FROM school_administrators WHERE id = 3")
+
+    # Clearing references from schedule_signatory_settings allows deletion; FK integrity holds.
+    with manager.transaction() as conn:
+        conn.execute(
+            "UPDATE schedule_signatory_settings "
+            "SET prepared_by_administrator_id = NULL, verified_by_administrator_id = NULL "
+            "WHERE schedule_type = 'CLASS'"
+        )
+        conn.execute("DELETE FROM school_administrators WHERE id = 2")
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_failed_v2_migration_rolls_back_all_v2_changes_and_preserves_v1(tmp_path: Path) -> None:
+    from tavio.database.schema_v2 import MIGRATION_V2_SQL
+
+    db_path = tmp_path / "failed_v2.db"
+    v1_manager = DatabaseManager(db_path, migrations=(DEFAULT_MIGRATIONS[0],))
+    v1_manager.initialize()
+
+    with v1_manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO school_profile (id, school_name, school_code, principal_name) "
+            "VALUES (1, 'SK Kekal', 'BBA3003', 'Puan Rosnah')"
+        )
+
+    broken_v2_migrations = (
+        DEFAULT_MIGRATIONS[0],
+        Migration(
+            version=2,
+            description="Broken v2 after DDL and backfill",
+            sql=f"{MIGRATION_V2_SQL}\nINSERT INTO non_existent_v2_table (id) VALUES (1);",
+        ),
+    )
+    failing_v2_manager = DatabaseManager(db_path, migrations=broken_v2_migrations)
+
+    with pytest.raises(DatabaseMigrationError, match="v2"):
+        failing_v2_manager.initialize()
+
+    assert failing_v2_manager.get_schema_version() == 1
+    with failing_v2_manager.connection() as conn:
+        tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        profile_cols = {row["name"] for row in conn.execute("PRAGMA table_info(school_profile)").fetchall()}
+        profile = conn.execute("SELECT school_name, principal_name FROM school_profile WHERE id = 1").fetchone()
+        fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+
+    assert len(tables) == 42
+    assert "school_administrators" not in tables
+    assert "schedule_signatory_settings" not in tables
+    assert "logo_path" not in profile_cols
+    assert profile is not None
+    assert (profile["school_name"], profile["principal_name"]) == ("SK Kekal", "Puan Rosnah")
+    assert fk_violations == []
+
+
 def test_database_package_has_no_ui_or_pyside_dependencies() -> None:
     db_dir = Path(__file__).resolve().parents[1] / "src" / "tavio" / "database"
     py_files = sorted(db_dir.glob("*.py"))
-    assert len(py_files) >= 5
+    assert len(py_files) >= 6
 
     for py_file in py_files:
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))

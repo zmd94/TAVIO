@@ -12,6 +12,7 @@ from tavio.database.exceptions import (
     UnsupportedDatabaseVersionError,
 )
 from tavio.database.schema_v1 import MIGRATION_V1_SQL
+from tavio.database.schema_v2 import MIGRATION_V2_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,14 @@ DEFAULT_MIGRATIONS: tuple[Migration, ...] = (
         version=1,
         description="Create TAVIO v1.3.2 core schema (42 tables, 45 indexes, 64 triggers) and default seeds",
         sql=MIGRATION_V1_SQL,
+    ),
+    Migration(
+        version=2,
+        description=(
+            "Add school_profile.logo_path, school_administrators, "
+            "schedule_signatory_settings, and principal_name backfill (v1.3.4)"
+        ),
+        sql=MIGRATION_V2_SQL,
     ),
 )
 
