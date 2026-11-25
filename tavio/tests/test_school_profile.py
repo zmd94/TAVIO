@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -495,6 +496,20 @@ def test_db_failure_when_backup_restore_fails_reports_error_and_preserves_backup
         size=(260, 260),
         color=(200, 40, 40),
     )
+    original_replace = os.replace
+    replace_calls = 0
+
+    def fail_on_restore_replace(
+        src: str | os.PathLike[str],
+        dst: str | os.PathLike[str],
+    ) -> None:
+        nonlocal replace_calls
+        replace_calls += 1
+        if replace_calls == 1:
+            original_replace(src, dst)
+            return
+        raise OSError("Restore permission denied")
+
     with (
         patch.object(
             service._repository,
@@ -503,12 +518,13 @@ def test_db_failure_when_backup_restore_fails_reports_error_and_preserves_backup
         ),
         patch(
             "tavio.services.school_profile_service.os.replace",
-            side_effect=OSError("Restore permission denied"),
+            side_effect=fail_on_restore_replace,
         ),
         pytest.raises(SchoolLogoError, match="Backup preserved at:") as exc_info,
     ):
         service.upload_logo(second_src)
 
+    assert replace_calls == 2
     assert "Simulated DB lock" in str(exc_info.value)
     assert "Restore permission denied" in str(exc_info.value)
     assert "backup preserved for manual recovery" in caplog.text
