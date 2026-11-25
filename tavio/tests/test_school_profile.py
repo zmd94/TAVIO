@@ -26,10 +26,8 @@ from tavio.services import (
     SchoolProfileService,
     SchoolProfileValidationError,
 )
-from tavio.services.startup_service import (
-    SolverVerificationResult,
-    StartupDiagnosticReport,
-)
+from tavio.services.startup_service import StartupDiagnosticReport
+from tavio.solver.smoke_test import SolverSmokeResult
 from tavio.ui import MainWindow, SchoolProfilePage
 
 
@@ -61,11 +59,11 @@ def _create_image_file(
 def _make_dummy_report() -> StartupDiagnosticReport:
     return StartupDiagnosticReport(
         dependencies=(),
-        solver_result=SolverVerificationResult(
-            success=True,
+        solver_result=SolverSmokeResult(
             status_name="OPTIMAL",
-            objective_value=1,
-            assigned_slots={"Ali": "Mon P1"},
+            objective_value=15,
+            assignments={"T1": 2, "T2": 1, "T3": 3},
+            wall_time_ms=1.25,
         ),
     )
 
