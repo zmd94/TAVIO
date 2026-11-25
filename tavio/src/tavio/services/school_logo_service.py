@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import warnings
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -80,44 +81,49 @@ class SchoolLogoService:
         previous_truncated_flag = ImageFile.LOAD_TRUNCATED_IMAGES
         ImageFile.LOAD_TRUNCATED_IMAGES = False
         try:
-            with Image.open(source_path) as raw_image:
-                original_format = (raw_image.format or "").upper()
-                if original_format not in SUPPORTED_IMAGE_FORMATS:
-                    raise SchoolLogoError(
-                        "Unsupported image format. Please choose a valid PNG, JPG, or JPEG image."
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                with Image.open(source_path) as raw_image:
+                    original_format = (raw_image.format or "").upper()
+                    if original_format not in SUPPORTED_IMAGE_FORMATS:
+                        raise SchoolLogoError(
+                            "Unsupported image format. Please choose a valid PNG, JPG, or JPEG image."
+                        )
+
+                    # Decode full pixel stream so corrupted/truncated payloads fail here.
+                    raw_image.load()
+                    oriented = ImageOps.exif_transpose(raw_image)
+                    orig_width, orig_height = oriented.size
+
+                    if orig_width < MIN_LOGO_DIMENSION or orig_height < MIN_LOGO_DIMENSION:
+                        raise SchoolLogoError(
+                            f"Logo dimensions ({orig_width}x{orig_height} px) are too small. "
+                            f"Minimum required size is {MIN_LOGO_DIMENSION}x{MIN_LOGO_DIMENSION} pixels."
+                        )
+
+                    has_transparency = _has_image_transparency(oriented)
+                    if has_transparency:
+                        working = oriented if oriented.mode == "RGBA" else oriented.convert("RGBA")
+                    elif oriented.mode in ("RGB", "L"):
+                        working = oriented.copy()
+                    else:
+                        working = oriented.convert("RGB")
+
+                    target_width, target_height = _calculate_proportional_size(
+                        orig_width,
+                        orig_height,
                     )
+                    was_resized = (target_width, target_height) != (orig_width, orig_height)
+                    if was_resized:
+                        working = working.resize(
+                            (target_width, target_height),
+                            Image.Resampling.LANCZOS,
+                        )
 
-                # Decode full pixel stream so corrupted/truncated payloads fail here.
-                raw_image.load()
-                oriented = ImageOps.exif_transpose(raw_image)
-                orig_width, orig_height = oriented.size
-
-                if orig_width < MIN_LOGO_DIMENSION or orig_height < MIN_LOGO_DIMENSION:
-                    raise SchoolLogoError(
-                        f"Logo dimensions ({orig_width}x{orig_height} px) are too small. "
-                        f"Minimum required size is {MIN_LOGO_DIMENSION}x{MIN_LOGO_DIMENSION} pixels."
-                    )
-
-                has_transparency = _has_image_transparency(oriented)
-                if has_transparency:
-                    working = oriented if oriented.mode == "RGBA" else oriented.convert("RGBA")
-                elif oriented.mode in ("RGB", "L"):
-                    working = oriented.copy()
-                else:
-                    working = oriented.convert("RGB")
-
-                target_width, target_height = _calculate_proportional_size(orig_width, orig_height)
-                was_resized = (target_width, target_height) != (orig_width, orig_height)
-                if was_resized:
-                    working = working.resize(
-                        (target_width, target_height),
-                        Image.Resampling.LANCZOS,
-                    )
-
-                self._write_png_atomically(working, destination_path)
+                    self._write_png_atomically(working, destination_path)
         except SchoolLogoError:
             raise
-        except Image.DecompressionBombError as exc:
+        except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
             raise SchoolLogoError(
                 "The selected image exceeds safe pixel decoding limits and was rejected."
             ) from exc

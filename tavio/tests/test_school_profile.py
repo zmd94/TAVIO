@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
@@ -422,6 +423,101 @@ def test_db_failure_after_logo_processing_restores_previous_logo_file(
         service.upload_logo(second_src)
 
     assert paths.school_logo_path.read_bytes() == first_bytes
+    assert not list(paths.assets_dir.glob(".school_logo_bak_*.tmp"))
+    view = service.load_profile()
+    assert view.profile is not None
+    assert view.profile.logo_path == "assets/school_logo.png"
+
+
+def test_upload_aborts_when_backup_of_existing_logo_fails(
+    isolated_tavio_dir: Path,
+    tmp_path: Path,
+) -> None:
+    paths, _db_manager, service = _setup_env(isolated_tavio_dir)
+    service.save_profile(
+        SchoolProfileInput(school_name="SK Backup Fail", school_code="BBA6667", school_week_group="B")
+    )
+    first_src = _create_image_file(
+        tmp_path / "first.png",
+        fmt="PNG",
+        size=(240, 240),
+        color=(15, 45, 95),
+    )
+    service.upload_logo(first_src)
+    first_bytes = paths.school_logo_path.read_bytes()
+
+    second_src = _create_image_file(
+        tmp_path / "second.png",
+        fmt="PNG",
+        size=(260, 260),
+        color=(200, 40, 40),
+    )
+    with (
+        patch(
+            "tavio.services.school_profile_service.tempfile.NamedTemporaryFile",
+            side_effect=OSError("Backup disk full"),
+        ),
+        patch.object(service._logo_service, "process_and_save_logo") as mock_process,
+        pytest.raises(SchoolLogoError, match="back up existing school logo"),
+    ):
+        service.upload_logo(second_src)
+
+    mock_process.assert_not_called()
+    assert paths.school_logo_path.read_bytes() == first_bytes
+    assert service.load_profile().profile is not None
+    assert service.load_profile().profile.logo_path == "assets/school_logo.png"
+
+
+def test_db_failure_when_backup_restore_fails_reports_error_and_preserves_backup(
+    isolated_tavio_dir: Path,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.ERROR)
+    paths, _db_manager, service = _setup_env(isolated_tavio_dir)
+    service.save_profile(
+        SchoolProfileInput(
+            school_name="SK Restore Fail",
+            school_code="BBA6668",
+            school_week_group="B",
+        )
+    )
+    first_src = _create_image_file(
+        tmp_path / "first.png",
+        fmt="PNG",
+        size=(240, 240),
+        color=(15, 45, 95),
+    )
+    service.upload_logo(first_src)
+    first_bytes = paths.school_logo_path.read_bytes()
+
+    second_src = _create_image_file(
+        tmp_path / "second.png",
+        fmt="PNG",
+        size=(260, 260),
+        color=(200, 40, 40),
+    )
+    with (
+        patch.object(
+            service._repository,
+            "update_logo_path",
+            side_effect=DatabaseError("Simulated DB lock"),
+        ),
+        patch(
+            "tavio.services.school_profile_service.os.replace",
+            side_effect=OSError("Restore permission denied"),
+        ),
+        pytest.raises(SchoolLogoError, match="Backup preserved at:") as exc_info,
+    ):
+        service.upload_logo(second_src)
+
+    assert "Simulated DB lock" in str(exc_info.value)
+    assert "Restore permission denied" in str(exc_info.value)
+    assert "backup preserved for manual recovery" in caplog.text
+
+    preserved_backups = list(paths.assets_dir.glob(".school_logo_bak_*.tmp"))
+    assert len(preserved_backups) == 1
+    assert preserved_backups[0].read_bytes() == first_bytes
 
 
 def test_remove_logo_clears_db_path_and_deletes_only_school_logo(
@@ -442,7 +538,150 @@ def test_remove_logo_clears_db_path_and_deletes_only_school_logo(
     assert updated is not None
     assert updated.logo_path is None
     assert not paths.school_logo_path.exists()
+    assert not list(paths.assets_dir.glob(".school_logo_remove_*.tmp"))
     assert unrelated_asset.is_file()
+
+
+def test_remove_logo_aborts_when_staging_fails(
+    isolated_tavio_dir: Path,
+    tmp_path: Path,
+) -> None:
+    paths, _db_manager, service = _setup_env(isolated_tavio_dir)
+    service.save_profile(
+        SchoolProfileInput(
+            school_name="SK Stage Fail",
+            school_code="BBA7778",
+            school_week_group="A",
+        )
+    )
+    src = _create_image_file(tmp_path / "logo.png", fmt="PNG", size=(220, 220))
+    service.upload_logo(src)
+    original_bytes = paths.school_logo_path.read_bytes()
+
+    unrelated_asset = paths.assets_dir / "keep_me.txt"
+    unrelated_asset.write_text("keep", encoding="utf-8")
+
+    with (
+        patch(
+            "tavio.services.school_profile_service.os.replace",
+            side_effect=OSError("File locked during staging"),
+        ),
+        pytest.raises(SchoolLogoError, match="Failed to stage school logo"),
+    ):
+        service.remove_logo()
+
+    assert paths.school_logo_path.read_bytes() == original_bytes
+    assert not list(paths.assets_dir.glob(".school_logo_remove_*.tmp"))
+    assert unrelated_asset.is_file()
+    view = service.load_profile()
+    assert view.profile is not None
+    assert view.profile.logo_path == "assets/school_logo.png"
+
+
+def test_remove_logo_db_failure_restores_staged_logo(
+    isolated_tavio_dir: Path,
+    tmp_path: Path,
+) -> None:
+    paths, _db_manager, service = _setup_env(isolated_tavio_dir)
+    service.save_profile(
+        SchoolProfileInput(
+            school_name="SK Remove DB Fail",
+            school_code="BBA7779",
+            school_week_group="B",
+        )
+    )
+    src = _create_image_file(tmp_path / "logo.png", fmt="PNG", size=(220, 220))
+    service.upload_logo(src)
+    original_bytes = paths.school_logo_path.read_bytes()
+
+    unrelated_asset = paths.assets_dir / "keep_me.txt"
+    unrelated_asset.write_text("keep", encoding="utf-8")
+
+    with (
+        patch.object(
+            service._repository,
+            "update_logo_path",
+            side_effect=DatabaseError("DB locked on remove"),
+        ),
+        pytest.raises(DatabaseError, match="DB locked on remove"),
+    ):
+        service.remove_logo()
+
+    assert paths.school_logo_path.read_bytes() == original_bytes
+    assert not list(paths.assets_dir.glob(".school_logo_remove_*.tmp"))
+    assert unrelated_asset.is_file()
+    view = service.load_profile()
+    assert view.profile is not None
+    assert view.profile.logo_path == "assets/school_logo.png"
+
+
+def test_remove_logo_logs_warning_when_staging_delete_fails_and_logo_absent(
+    isolated_tavio_dir: Path,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING)
+    paths, _db_manager, service = _setup_env(isolated_tavio_dir)
+    service.save_profile(
+        SchoolProfileInput(
+            school_name="SK Staging Delete Warn",
+            school_code="BBA7780",
+            school_week_group="B",
+        )
+    )
+    src = _create_image_file(tmp_path / "logo.png", fmt="PNG", size=(220, 220))
+    service.upload_logo(src)
+
+    unrelated_asset = paths.assets_dir / "keep_me.txt"
+    unrelated_asset.write_text("keep", encoding="utf-8")
+
+    orig_unlink = Path.unlink
+
+    def selective_unlink(self: Path, missing_ok: bool = False) -> None:
+        if self.name.startswith(".school_logo_remove_"):
+            raise PermissionError("Locked by antivirus")
+        orig_unlink(self, missing_ok=missing_ok)
+
+    with patch.object(Path, "unlink", selective_unlink):
+        updated = service.remove_logo()
+
+    assert updated is not None
+    assert updated.logo_path is None
+    assert not paths.school_logo_path.exists()
+    assert unrelated_asset.is_file()
+    assert "failed to delete staged logo" in caplog.text
+
+
+def test_upload_rejects_image_triggering_decompression_bomb_warning(
+    isolated_tavio_dir: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, _db_manager, service = _setup_env(isolated_tavio_dir)
+    service.save_profile(
+        SchoolProfileInput(
+            school_name="SK Bomb Guard",
+            school_code="BBA7781",
+            school_week_group="B",
+        )
+    )
+    existing_src = _create_image_file(
+        tmp_path / "existing.png",
+        fmt="PNG",
+        size=(160, 160),
+        color=(20, 80, 140),
+    )
+    service.upload_logo(existing_src)
+    existing_bytes = paths.school_logo_path.read_bytes()
+
+    # 250x250 = 62,500 pixels: > 50,000 and <= 100,000 triggers DecompressionBombWarning.
+    warn_src = _create_image_file(tmp_path / "bomb_warning.png", fmt="PNG", size=(250, 250))
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 50_000)
+
+    with pytest.raises(SchoolLogoError, match="safe pixel decoding limits"):
+        service.upload_logo(warn_src)
+
+    assert paths.school_logo_path.read_bytes() == existing_bytes
 
 
 def test_load_profile_handles_missing_logo_file_on_disk_gracefully(
