@@ -1,0 +1,243 @@
+TAVIO — Database Scheme v1.3.4
+
+Status: Draf akhir untuk kelulusan
+Baseline: Database Schema v1.3.2 + pembetulan Composite Foreign Key
+Migration sasaran: v1 -> v2
+
+1. TUJUAN
+
+Dokumen ini menetapkan perubahan skema pangkalan data bagi menyokong pengurusan profil sekolah, logo sekolah, pentadbir sekolah dan konfigurasi penandatangan laporan jadual waktu.
+
+Semua perubahan mesti dilaksanakan melalui Migration v2 tanpa merosakkan atau kehilangan data sedia ada.
+
+2. BASELINE PANGKALAN DATA SEMASA
+
+Berdasarkan audit pangkalan data sebenar dan semakan kod sumber:
+
+- PRAGMA user_version: 1
+- Tables: 42
+- Indexes: 45
+- Triggers: 64
+- Foreign key violations: 0
+
+Baseline menggunakan skema v1.3.2 bersama pembetulan Composite Foreign Key untuk relief_assignments.
+
+Semua struktur dan data sedia ada mesti dikekalkan kecuali perubahan yang dinyatakan secara jelas dalam dokumen ini.
+
+3. PENAMBAHBAIKAN SCHOOL PROFILE
+
+3.1 Maklumat sekolah
+
+Profil sekolah perlu menyokong:
+- Nama sekolah
+- Kod sekolah
+- Alamat sekolah
+- Nombor telefon
+- Alamat e-mel
+- School Week Group (A atau B)
+- Logo sekolah
+
+Maklumat disimpan dalam jadual school_profile sedia ada.
+
+3.2 Logo sekolah
+
+Pengguna boleh:
+- Memuat naik logo.
+- Melihat pratonton.
+- Menggantikan logo.
+- Membuang logo.
+
+Format muat naik: PNG, JPG dan JPEG.
+
+Semua imej akan ditukar kepada format PNG semasa disimpan.
+
+Nama fail tetap:
+school_logo.png
+
+Lokasi:
+%LOCALAPPDATA%\TAVIO\assets\school_logo.png
+
+Pangkalan data menyimpan laluan relatif fail, bukan kandungan imej dalam bentuk BLOB.
+
+Peraturan paparan:
+- Kekalkan nisbah aspek asal.
+- Jangan meregangkan atau memesongkan logo.
+- Logo digunakan secara automatik dalam:
+  - Jadual waktu individu guru.
+  - Jadual waktu kelas.
+  - Jadual penggunaan bilik khas.
+
+Backup dan restore mesti merangkumi fail logo. Jika logo tiada semasa pemulihan, sistem perlu mengendalikan keadaan tersebut tanpa menyebabkan aplikasi gagal.
+
+Medan baharu pada school_profile:
+
+- logo_path TEXT — laluan relatif logo; NULL jika tiada logo.
+
+4. PENGURUSAN PENTADBIR SEKOLAH
+
+4.1 Jadual baharu: school_administrators
+
+Medan:
+- id INTEGER — primary key
+- position_title TEXT — jawatan pentadbir
+- administrator_name TEXT — nama pentadbir
+- sort_order INTEGER — susunan paparan
+- is_active INTEGER — status aktif
+- created_at TEXT — tarikh rekod dicipta
+- updated_at TEXT — tarikh rekod dikemas kini
+
+Keperluan:
+- Bilangan pentadbir tidak dihadkan.
+- Jawatan boleh ditetapkan secara bebas.
+- Tiada senarai jawatan yang dihardcode.
+- Pengguna boleh menambah, mengedit, menyusun, menyahaktifkan dan mengaktifkan semula rekod.
+- Nama dan jawatan wajib diisi.
+- Susunan paparan menggunakan sort_order.
+
+4.2 Keserasian dengan principal_name
+
+Medan principal_name sedia ada mesti dikekalkan.
+
+Semasa Migration v2:
+- Jika principal_name mempunyai nilai, cipta rekod pentadbir dengan jawatan Guru Besar.
+- Gunakan nilai asal sebagai administrator_name.
+- Jika kosong, jangan cipta rekod backfill.
+- Jangan memadam atau mengosongkan nilai asal.
+- Pastikan backfill tidak menghasilkan rekod pendua.
+
+5. KONFIGURASI PENANDATANGAN LAPORAN
+
+5.1 Jadual baharu: schedule_signatory_settings
+
+Jenis laporan:
+- TEACHER — jadual waktu individu guru
+- CLASS — jadual waktu kelas
+- SPECIAL_ROOM — jadual penggunaan bilik khas
+
+Medan:
+- schedule_type TEXT — primary key dan jenis laporan
+- prepared_by_administrator_id INTEGER — rujukan pentadbir penyedia
+- verified_by_administrator_id INTEGER — rujukan pentadbir pengesah
+- created_at TEXT — tarikh rekod dicipta
+- updated_at TEXT — tarikh rekod dikemas kini
+
+Kedua-dua medan ID pentadbir mempunyai foreign key kepada school_administrators(id) dengan tindakan ON DELETE RESTRICT.
+
+5.2 Rekod konfigurasi awal
+
+Migration v2 mesti menyediakan tepat tiga rekod konfigurasi:
+- TEACHER
+- CLASS
+- SPECIAL_ROOM
+
+Kedua-dua medan ID pentadbir bermula dengan nilai NULL.
+
+Pengguna perlu menetapkan seorang penyedia dan seorang pengesah bagi setiap jenis laporan sebelum laporan boleh dijana.
+
+5.3 Peraturan penandatangan
+
+1. Setiap jenis laporan mempunyai satu konfigurasi sahaja.
+2. Setiap laporan mempunyai tepat seorang penyedia dan seorang pengesah.
+3. Individu yang sama boleh menjadi penyedia dan pengesah.
+4. Individu berbeza juga dibenarkan.
+5. Konfigurasi setiap jenis laporan adalah berasingan.
+6. Pentadbir yang tidak aktif tidak boleh digunakan untuk laporan baharu.
+
+5.4 Pentadbir tidak aktif
+
+Jika pentadbir yang telah dipilih dinyahaktifkan:
+- Konfigurasi sedia ada tidak dipadam.
+- Sistem mengesan status tidak aktif.
+- Sistem meminta pengguna memilih pengganti sebelum laporan berkaitan dijana.
+- Pentadbir tidak aktif tidak boleh digunakan sebagai penandatangan laporan baharu.
+
+Rekod pentadbir yang masih dirujuk oleh konfigurasi tidak boleh dipadam kerana kekangan foreign key.
+
+6. TARIKH LAPORAN
+
+Tarikh ditetapkan secara manual ketika menjana atau mencetak laporan.
+
+Peraturan:
+- Format paparan DD/MM/YYYY.
+- Tidak semestinya mengikut tarikh semasa komputer.
+- Pengguna bebas memilih tarikh.
+- Tarikh bukan tetapan kekal profil sekolah.
+- Tidak perlu menambah jadual khas tarikh laporan tanpa kelulusan berasingan.
+
+7. SUSUN ATUR BAHAGIAN TANDATANGAN
+
+Bahagian bawah laporan menggunakan tiga ruang:
+
+Ruang kiri:
+- DISEDIAKAN OLEH
+- Nama penyedia
+- Jawatan penyedia
+- Ruang tandatangan
+
+Ruang tengah:
+- DISAHKAN OLEH
+- Nama pengesah
+- Jawatan pengesah
+- Ruang tandatangan
+
+Ruang kanan:
+- TARIKH
+- Tarikh pilihan
+
+Nama dan jawatan diperoleh daripada rekod pentadbir yang ditetapkan dalam konfigurasi penandatangan.
+
+Susun atur mesti konsisten untuk ketiga-tiga jenis laporan.
+
+8. MIGRATION v2
+
+Migration v2 menaikkan PRAGMA user_version daripada 1 kepada 2.
+
+Perubahan:
+1. Tambah medan logo_path pada school_profile.
+2. Cipta jadual school_administrators.
+3. Cipta jadual schedule_signatory_settings.
+4. Backfill principal_name kepada rekod pentadbir jika mempunyai nilai.
+5. Masukkan tiga rekod konfigurasi penandatangan dengan medan pentadbir NULL.
+6. Kekalkan semua data dan struktur sedia ada.
+
+Keperluan migrasi:
+- Dilaksanakan dalam transaksi.
+- Rollback keseluruhan migrasi jika berlaku kegagalan.
+- Tidak mengubah Migration v1.
+- Tidak menghasilkan rekod pendua.
+- Tidak mengubah jadual, indeks, trigger atau foreign key sedia ada secara tidak sengaja.
+- Backup dibuat sebelum migrasi pada pangkalan data sebenar.
+
+9. KEPERLUAN UJIAN
+
+Sekurang-kurangnya ujian berikut mesti dilaksanakan:
+- Migration v1 -> v2 berjaya.
+- Rollback apabila migrasi gagal.
+- Data sedia ada dikekalkan.
+- principal_name berjaya di-backfill.
+- Backfill tidak menghasilkan rekod pendua.
+- Tiga rekod konfigurasi diwujudkan tepat sekali.
+- Foreign key baharu berfungsi.
+- Pentadbir boleh ditambah, diedit, disusun dan dinyahaktifkan.
+- Pentadbir tidak aktif tidak boleh digunakan untuk laporan baharu.
+- Konfigurasi penyedia dan pengesah berfungsi bagi ketiga-tiga jenis laporan.
+- Logo PNG, JPG dan JPEG boleh dimuat naik dan disimpan sebagai PNG.
+- Logo boleh diganti dan dibuang.
+- Backup dan restore memulihkan logo dengan betul.
+- PRAGMA foreign_key_check tidak menghasilkan pelanggaran.
+- Semua ujian sedia ada masih lulus.
+
+10. KAWALAN PERUBAHAN SKEMA
+
+Sebarang perubahan yang tidak dinyatakan dalam dokumen ini memerlukan kelulusan terlebih dahulu.
+
+Dilarang:
+- Memadam atau mengubah struktur sedia ada tanpa kelulusan.
+- Menambah indeks tambahan secara automatik.
+- Mengubah Migration v1.
+- Memadam medan principal_name.
+- Menyimpan logo sebagai BLOB.
+- Menghardcode senarai jawatan pentadbir.
+- Menjana laporan tanpa penyedia dan pengesah yang sah.
+
+Akhir dokumen — TAVIO Database Scheme v1.3.4
