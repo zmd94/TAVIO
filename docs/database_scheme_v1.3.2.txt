@@ -1,0 +1,2520 @@
+TAVIO DATABASE SCHEMA SPECIFICATION v1.3.2
+Projek: TAVIO — Timetable Administration & Validation Intelligent Organizer
+Sistem: Smart School Scheduling System (Offline-First Desktop: Python 3.12, PySide6, SQLite, OR-Tools CP-SAT)
+Status: Diaudit & Disahkan pada SQLite 3.40.1 (READY FOR MIGRATION)
+Skop Dokumen: Kemas kini v1.3.2 bagi membetulkan 5 isu yang dikenal pasti daripada semakan v1.3.1, dengan mengekalkan semua keputusan fungsi dan struktur v1.3 & v1.3.1 yang telah dimuktamadkan.
+Ringkasan Pembetulan v1.3.2
+special_room_allocation_slots (Isu Kritikal): Kekangan UNIQUE (special_room_allocation_id) dibuang dan digantikan dengan slot_sequence IN (1, 2, 3), UNIQUE (special_room_allocation_id, slot_sequence), serta UNIQUE (special_room_allocation_id, start_minute, end_minute). timetable_entry_id dan day_of_week diikat pada special_room_allocations dan dipropagasikan melalui Composite FK ke semua slot supaya Single = 1 slot, Double = 2 slot, Triple = 3 slot menggunakan room_id, timetable_entry_id, dan allocation_date yang sama, mewakili period sebenar dalam timetable_entry_target_periods, serta menyemak kapasiti max_concurrent_classes mengikut pertindihan masa sebenar setiap slot.
+absence_reasons (Jadual Baharu — Jadual #36 daripada 42): Ditambah jadual absence_reasons (id, name, description, is_active, created_at, updated_at) dan dihubungkan daripada teacher_absences.absence_reason_id melalui FOREIGN KEY (absence_reason_id) REFERENCES absence_reasons(id) ON DELETE RESTRICT, ditambah trigger menghalang sebab tidak aktif (is_active = 0) dipilih bagi rekod baharu sambil mengekalkan rekod sejarah sedia ada.
+timetable_workspace_autosaves Foreign Key: Dipisahkan kepada FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE dan FK kolum tunggal FOREIGN KEY (base_timetable_version_id) REFERENCES timetable_versions(id) ON DELETE SET NULL, disokong oleh trigger trg_twa_base_version_ins/upd yang menyemak kesepadanan academic_year_id dan session_id. Pemadaman timetable_versions kini menetapkan hanya base_timetable_version_id = NULL tanpa melanggar NOT NULL pada academic_year_id dan session_id.
+Excel Import Scope (import_batches.entity_scope): Nilai 'TEACHER_SUBJECTS' digugurkan. Hanya 5 kategori asal yang diluluskan dikekalkan: TEACHERS, SUBJECTS, CLASSES, ROOMS, dan TEACHING_ASSIGNMENTS.
+ERD Mermaid Lengkap: Bahagian 7G dikemas kini dengan kod Mermaid erDiagram sebenar yang merangkumi kesemua 42 jadual tanpa sebarang placeholder.
+1. SPECIAL ROOM ALLOCATION SLOTS — PEMBETULAN SINGLE, DOUBLE & TRIPLE
+Masalah dalam v1.3.1
+Kekangan UNIQUE (special_room_allocation_id) pada special_room_allocation_slots mengehadkan setiap special_room_allocation kepada maksimum 1 baris slot sahaja, yang bercanggah dengan keperluan blok Double (2 period) dan Triple (3 period).
+Reka Bentuk Baharu v1.3.2
+Pengikatan Entry & Hari pada special_room_allocations:
+Ditambah timetable_entry_id dan day_of_week dengan FOREIGN KEY (timetable_entry_id, timetable_version_id, timetable_lesson_id, day_of_week) REFERENCES timetable_entries(id, timetable_version_id, timetable_lesson_id, day_of_week) ON DELETE CASCADE.
+Indeks unik komposit UNIQUE (id, special_room_schedule_id, timetable_version_id, timetable_lesson_id, timetable_entry_id, room_id, allocation_date, day_of_week) menjadi sasaran Composite FK daripada special_room_allocation_slots.
+Jaminan struktur: Semua 1/2/3 slot bagi satu special_room_allocation_id mustahil berbeza room_id, timetable_entry_id, timetable_lesson_id, allocation_date, atau day_of_week.
+Struktur Multi-Slot pada special_room_allocation_slots:
+Ditambah slot_sequence INTEGER NOT NULL CHECK (slot_sequence IN (1, 2, 3)).
+Digantikan UNIQUE (special_room_allocation_id) dengan:
+UNIQUE (special_room_allocation_id, slot_sequence)
+UNIQUE (special_room_allocation_id, start_minute, end_minute)
+Maka:
+Single (periods_used = 1): 1 baris (slot_sequence = 1).
+Double (periods_used = 2): 2 baris (slot_sequence = 1, 2).
+Triple (periods_used = 3): 3 baris (slot_sequence = 1, 2, 3).
+Pengesahan Period Sebenar & Keselanjaran (trg_sras_validate_ins/upd):
+Trigger memastikan NEW.slot_sequence <= sra.periods_used.
+Trigger memastikan wujud padanan tepat dalam timetable_entry_target_periods:
+tetp.timetable_entry_id = NEW.timetable_entry_id AND tetp.period_sequence = NEW.slot_sequence AND tetp.start_minute = NEW.start_minute AND tetp.end_minute = NEW.end_minute.
+Ini menjamin setiap slot mewakili period 'teaching' sebenar daripada jadual loceng kelas (serta serasi untuk Single Class mahupun Combined Class berbeza jadual loceng apabila julat [start_minute, end_minute) sama).
+Trigger memastikan slot bersebelahan (slot_sequence 1↔2↔3) bersambung tepat (prev.end_minute = next.start_minute) tanpa jurang atau pertindihan dalaman.
+Pengiraan max_concurrent_classes per Slot (trg_sras_max_concurrent_ins/upd):
+Menyemak bilangan kelas unik (COUNT(DISTINCT tlt.class_id)) pada setiap titik permulaan slot bertindih (s.start_minute <= pt.start_minute AND pt.start_minute < s.end_minute) bagi (special_room_schedule_id, room_id, allocation_date).
+Jika satu kelas mempunyai blok Triple (P1+P2+P3) dan satu lagi kelas berkongsi bilik sama hanya pada P3, pertindihan hanya berlaku pada P3 (2 <= max_concurrent_classes), manakala slot P1 dan P2 kekal mempunyai kapasiti bebas untuk kelas lain.
+Jumlah Slot = periods_used:
+SQLite menguatkuasakan had atas (slot_sequence <= periods_used, unik per slot_sequence dan masa), manakala Lapisan Perkhidmatan mengesahkan kelengkapan penuh (COUNT(*) = periods_used) sebelum COMMIT dalam transaksi atomik penyimpanan pelan bilik khas.
+2. absence_reasons — PENGURUSAN SEBAB KETIDAKHADIRAN & PERLINDUNGAN SEJARAH
+Struktur absence_reasons (Jadual #36)
+SQL
+CREATE TABLE absence_reasons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    description TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE UNIQUE INDEX uq_absence_reasons_name ON absence_reasons (TRIM(name) COLLATE NOCASE);
+Integrasi dengan teacher_absences (Jadual #37)
+teacher_absences menggunakan absence_reason_id INTEGER NOT NULL (menggantikan reason TEXT sahaja) serta mengekalkan notes TEXT bagi catatan tambahan opsional:
+FOREIGN KEY (absence_reason_id) REFERENCES absence_reasons(id) ON DELETE RESTRICT
+Tambah sebab baharu: INSERT INTO absence_reasons (name, description) ... (unik tanpa mengira huruf besar/kecil atau ruang tepi).
+Ubah nama sebab: UPDATE absence_reasons SET name = ... WHERE id = ... dibenarkan; semua teacher_absences sedia ada kekal sah.
+Nyahaktifkan sebab (is_active = 0): Rekod sejarah teacher_absences yang sedia merujuk absence_reason_id tersebut tidak terjejas dan masih boleh dilihat serta dipautkan kepada relief_assignments. Trigger trg_teacher_absences_reason_active_ins/upd hanya menyekat pemilihan sebab is_active = 0 bagi rekod ketidakhadiran baharu atau penukaran kepada sebab tidak aktif.
+Halangan pemadaman fizikal: ON DELETE RESTRICT menolak sebarang cubaan DELETE FROM absence_reasons jika id tersebut pernah digunakan dalam teacher_absences (hanya sebab yang belum pernah digunakan boleh dipadam secara fizikal).
+3. timetable_workspace_autosaves — PEMBETULAN FOREIGN KEY
+Punca Ralat dalam v1.3.1
+Dalam v1.3.1, FOREIGN KEY (base_timetable_version_id, academic_year_id, session_id) REFERENCES timetable_versions(id, academic_year_id, session_id) ON DELETE SET NULL cuba menetapkan ketiga-tiga kolum kepada NULL apabila baris timetable_versions dipadamkan, yang akan gagal kerana academic_year_id dan session_id ialah NOT NULL.
+Pembetulan v1.3.2
+academic_year_id dan session_id kekal NOT NULL dengan:
+FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE
+base_timetable_version_id ialah kolum boleh-NULL dengan FK kolum tunggal:
+FOREIGN KEY (base_timetable_version_id) REFERENCES timetable_versions(id) ON DELETE SET NULL
+Trigger trg_twa_base_version_ins dan trg_twa_base_version_upd mengesahkan bahawa apabila base_timetable_version_id IS NOT NULL, versi asas tersebut mesti tergolong dalam academic_year_id dan session_id yang sama.
+Kesan apabila versi dipadamkan: Jika timetable_version yang tidak dikunci RELIEF dipadamkan, SQLite menetapkan hanya base_timetable_version_id = NULL. academic_year_id, session_id, dan payload_json kekal utuh sepenuhnya supaya draf AUTOSAVE masih boleh dipulihkan dengan selamat dan disimpan sebagai versi baharu.
+4. EXCEL IMPORT SCOPE — PENGEKALAN LIMA KATEGORI ASAL
+Hasil Audit TEACHER_SUBJECTS
+Dalam spesifikasi import Excel TAVIO, pengguna mengurus kelayakan subjek guru (teacher_subjects) secara langsung melalui antara muka pengurusan data induk guru/subjek, manakala pengimportan pukal Excel hanya merangkumi 5 kategori:
+TEACHERS
+SUBJECTS
+CLASSES
+ROOMS
+TEACHING_ASSIGNMENTS
+Memasukkan 'TEACHER_SUBJECTS' dalam import_batches.entity_scope merupakan penambahan skop luar spesifikasi dan telah dibuang dalam v1.3.2:
+SQL
+entity_scope TEXT NOT NULL CHECK (
+    entity_scope IN ('TEACHERS', 'SUBJECTS', 'CLASSES', 'ROOMS', 'TEACHING_ASSIGNMENTS')
+)
+Nota: Ketika mengimport TEACHING_ASSIGNMENTS, Lapisan Perkhidmatan tetap mengesahkan bahawa guru (dikenal pasti melalui short_name) telah dipetakan ke teacher_sessions dan teacher_subjects yang sepadan (selari dengan Composite FK pada teaching_assignment_teachers).
+5. KEKANGAN TERAS LAIN YANG DIKEKALKAN DARIPADA v1.3 & v1.3.1
+Semua ketetapan terdahulu dikekalkan tanpa perubahan:
+School Week Group A/B: school_profile.school_week_group IN ('A', 'B') DEFAULT 'B' terpakai untuk semua tahun/sesi; operating_days (1..7) autoritatif per sesi; WEEKLY dan FORTNIGHTLY ikut sempadan minggu kalendar sekolah (Ahad–Sabtu bagi A, Isnin–Ahad bagi B; bukan rolling 14 hari); MONTHLY ikut bulan kalendar sebenar (YYYY-MM).
+Room Configuration Check: CHECK kalis logik 3-nilai NULL dalam teaching_assignments dan timetable_lessons, serta trigger memastikan room_type = 'SPECIAL'.
+Time-Off Integrity: Composite FK pada teacher_time_off dan class_time_off + FK tunggal ON DELETE SET NULL pada bell_period_id + trigger sesi/jadual loceng/minit pada kesemua 4 jadual time-off.
+Combined Class Teaching & timetable_entry_target_periods: Menyokong Single/Double/Triple gabungan berlainan jadual loceng selagi [start_minute, end_minute) tepat sama dan semua period bertipe 'teaching'.
+RELIEF Version Locking: Hanya baris relief_assignments (termasuk status 'CANCELLED') mengunci kekal timetable_versions dan 5 jadual anaknya; relief_batches kosong tidak mengunci versi; pemadaman relief_assignments dan mutasi snapshot sejarah disekat.
+Teacher Sessions Validation: DB menjamin <= 1 sesi per guru per tahun akademik (UNIQUE(academic_year_id, teacher_id)), manakala Lapisan Perkhidmatan membuat pre-flight validation == 1 sesi aktif sebelum Main Timetable Solver, import Excel TEACHING_ASSIGNMENTS, dan pemprosesan RELIEF.
+6. RINGKASAN BILANGAN OBJEK SKEMA v1.3.2
+Komponen Skema	v1.3.1	v1.3.2	Catatan Perubahan
+Jadual (TABLE)	41	42	+1 jadual baharu absence_reasons
+Indeks Tersuai (uq_* + idx_*)	43	45	+1 uq_absence_reasons_name, +1 idx_teacher_absences_reason
+Trigger (TRIGGER)	60	64	+2 trg_twa_base_version_*, +2 trg_teacher_absences_reason_active_*, serta penambahbaikan trg_sra_validate_* & trg_sras_validate_*
+7. COMPLETE EXECUTABLE SQL IMPLEMENTATION (v1.3.2 — 42 JADUAL)
+7A–7D. CREATE TABLE, Primary Keys, Foreign Keys, Indeks Unik/Separa/Ekspresi, dan CHECK Constraints
+SQL
+PRAGMA foreign_keys = ON;
+
+-- 1. school_profile
+CREATE TABLE school_profile (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    school_name TEXT NOT NULL CHECK (LENGTH(TRIM(school_name)) > 0),
+    school_code TEXT NOT NULL CHECK (LENGTH(TRIM(school_code)) > 0),
+    school_week_group TEXT NOT NULL DEFAULT 'B' CHECK (school_week_group IN ('A', 'B')),
+    address TEXT,
+    phone TEXT,
+    email TEXT,
+    principal_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- 2. academic_years
+CREATE TABLE academic_years (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year_code TEXT NOT NULL CHECK (LENGTH(TRIM(year_code)) > 0),
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    start_date TEXT NOT NULL CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    end_date TEXT NOT NULL CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CHECK (end_date >= start_date)
+);
+CREATE UNIQUE INDEX uq_academic_years_code ON academic_years (TRIM(year_code) COLLATE NOCASE);
+
+-- 3. school_sessions
+CREATE TABLE school_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_code TEXT NOT NULL CHECK (LENGTH(TRIM(session_code)) > 0),
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    sort_order INTEGER NOT NULL DEFAULT 1 CHECK (sort_order >= 1),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE,
+    UNIQUE (id, academic_year_id)
+);
+CREATE UNIQUE INDEX uq_school_sessions_code ON school_sessions (academic_year_id, TRIM(session_code) COLLATE NOCASE);
+
+-- 4. operating_days
+CREATE TABLE operating_days (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    is_operating INTEGER NOT NULL DEFAULT 1 CHECK (is_operating IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id) REFERENCES school_sessions(id) ON DELETE CASCADE,
+    UNIQUE (session_id, day_of_week)
+);
+
+-- 5. school_holidays
+CREATE TABLE school_holidays (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER,
+    holiday_date TEXT NOT NULL CHECK (holiday_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    holiday_type TEXT NOT NULL DEFAULT 'PUBLIC' CHECK (holiday_type IN ('PUBLIC', 'SCHOOL', 'EVENT')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES school_sessions(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX uq_school_holidays_year_wide
+    ON school_holidays (academic_year_id, holiday_date)
+    WHERE session_id IS NULL;
+CREATE UNIQUE INDEX uq_school_holidays_session
+    ON school_holidays (academic_year_id, session_id, holiday_date)
+    WHERE session_id IS NOT NULL;
+
+-- 6. education_levels
+CREATE TABLE education_levels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    level_code TEXT NOT NULL CHECK (LENGTH(TRIM(level_code)) > 0),
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    sort_order INTEGER NOT NULL DEFAULT 1 CHECK (sort_order >= 1),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    UNIQUE (id, session_id),
+    UNIQUE (id, academic_year_id, session_id)
+);
+CREATE UNIQUE INDEX uq_education_levels_code ON education_levels (session_id, TRIM(level_code) COLLATE NOCASE);
+
+-- 7. bell_schedules
+CREATE TABLE bell_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+    description TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id) REFERENCES school_sessions(id) ON DELETE CASCADE,
+    UNIQUE (id, session_id)
+);
+CREATE UNIQUE INDEX uq_bell_schedules_name ON bell_schedules (session_id, TRIM(name) COLLATE NOCASE);
+CREATE UNIQUE INDEX uq_bell_schedules_default ON bell_schedules (session_id) WHERE is_default = 1;
+
+-- 8. bell_periods
+CREATE TABLE bell_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bell_schedule_id INTEGER NOT NULL,
+    period_number INTEGER NOT NULL CHECK (period_number >= 1),
+    label TEXT NOT NULL CHECK (LENGTH(TRIM(label)) > 0),
+    period_type TEXT NOT NULL CHECK (period_type IN ('teaching', 'recess', 'assembly', 'activity', 'other')),
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    is_schedulable INTEGER NOT NULL DEFAULT 1 CHECK (is_schedulable IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (bell_schedule_id) REFERENCES bell_schedules(id) ON DELETE CASCADE,
+    UNIQUE (id, bell_schedule_id),
+    UNIQUE (bell_schedule_id, period_number),
+    CHECK (end_minute > start_minute),
+    CHECK (
+        (period_type = 'teaching' AND is_schedulable IN (0, 1))
+        OR
+        (period_type != 'teaching' AND is_schedulable = 0)
+    )
+);
+
+-- 9. bell_schedule_level_mappings
+CREATE TABLE bell_schedule_level_mappings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    education_level_id INTEGER NOT NULL,
+    bell_schedule_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (education_level_id, session_id) REFERENCES education_levels(id, session_id) ON DELETE CASCADE,
+    FOREIGN KEY (bell_schedule_id, session_id) REFERENCES bell_schedules(id, session_id) ON DELETE CASCADE,
+    UNIQUE (session_id, education_level_id)
+);
+
+-- 10. bell_schedule_day_overrides
+CREATE TABLE bell_schedule_day_overrides (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    education_level_id INTEGER,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    bell_schedule_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id) REFERENCES school_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (education_level_id) REFERENCES education_levels(id) ON DELETE CASCADE,
+    FOREIGN KEY (bell_schedule_id, session_id) REFERENCES bell_schedules(id, session_id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX uq_bs_day_override_session
+    ON bell_schedule_day_overrides (session_id, day_of_week)
+    WHERE education_level_id IS NULL;
+CREATE UNIQUE INDEX uq_bs_day_override_level
+    ON bell_schedule_day_overrides (session_id, education_level_id, day_of_week)
+    WHERE education_level_id IS NOT NULL;
+
+-- 11. teachers
+CREATE TABLE teachers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    short_name TEXT NOT NULL CHECK (LENGTH(TRIM(short_name)) > 0),
+    full_name TEXT NOT NULL CHECK (LENGTH(TRIM(full_name)) > 0),
+    staff_code TEXT,
+    email TEXT,
+    phone TEXT,
+    max_periods_per_day INTEGER CHECK (max_periods_per_day IS NULL OR max_periods_per_day >= 1),
+    max_periods_per_week INTEGER CHECK (max_periods_per_week IS NULL OR max_periods_per_week >= 1),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE UNIQUE INDEX uq_teachers_short_name ON teachers (TRIM(short_name) COLLATE NOCASE);
+CREATE UNIQUE INDEX uq_teachers_staff_code
+    ON teachers (TRIM(staff_code) COLLATE NOCASE)
+    WHERE staff_code IS NOT NULL AND LENGTH(TRIM(staff_code)) > 0;
+
+-- 12. teacher_sessions
+CREATE TABLE teacher_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    teacher_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    max_periods_per_day_override INTEGER CHECK (max_periods_per_day_override IS NULL OR max_periods_per_day_override >= 1),
+    max_periods_per_week_override INTEGER CHECK (max_periods_per_week_override IS NULL OR max_periods_per_week_override >= 1),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE,
+    UNIQUE (academic_year_id, teacher_id),
+    UNIQUE (academic_year_id, teacher_id, session_id)
+);
+
+-- 13. subjects
+CREATE TABLE subjects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    short_name TEXT NOT NULL CHECK (LENGTH(TRIM(short_name)) > 0),
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    color_hex TEXT CHECK (color_hex IS NULL OR color_hex GLOB '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]'),
+    category TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE UNIQUE INDEX uq_subjects_short_name ON subjects (TRIM(short_name) COLLATE NOCASE);
+
+-- 14. teacher_subjects
+CREATE TABLE teacher_subjects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    teacher_id INTEGER NOT NULL,
+    subject_id INTEGER NOT NULL,
+    qualification_notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE,
+    FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE,
+    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+    UNIQUE (academic_year_id, teacher_id, subject_id)
+);
+
+-- 15. rooms
+CREATE TABLE rooms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    short_name TEXT NOT NULL CHECK (LENGTH(TRIM(short_name)) > 0),
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    room_type TEXT NOT NULL CHECK (room_type IN ('REGULAR', 'SPECIAL')),
+    capacity INTEGER CHECK (capacity IS NULL OR capacity >= 1),
+    max_concurrent_classes INTEGER NOT NULL DEFAULT 1 CHECK (max_concurrent_classes >= 1),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE UNIQUE INDEX uq_rooms_short_name ON rooms (TRIM(short_name) COLLATE NOCASE);
+
+-- 16. classes
+CREATE TABLE classes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    education_level_id INTEGER NOT NULL,
+    short_name TEXT NOT NULL CHECK (LENGTH(TRIM(short_name)) > 0),
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    student_count INTEGER CHECK (student_count IS NULL OR student_count >= 0),
+    home_room_id INTEGER,
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    FOREIGN KEY (education_level_id, academic_year_id, session_id) REFERENCES education_levels(id, academic_year_id, session_id) ON DELETE RESTRICT,
+    FOREIGN KEY (home_room_id) REFERENCES rooms(id) ON DELETE SET NULL,
+    UNIQUE (id, session_id),
+    UNIQUE (id, academic_year_id, session_id)
+);
+CREATE UNIQUE INDEX uq_classes_short_name ON classes (academic_year_id, session_id, TRIM(short_name) COLLATE NOCASE);
+
+-- 17. student_groups
+CREATE TABLE student_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_id INTEGER NOT NULL,
+    group_code TEXT NOT NULL CHECK (LENGTH(TRIM(group_code)) > 0),
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    student_count INTEGER CHECK (student_count IS NULL OR student_count >= 0),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+    UNIQUE (id, class_id)
+);
+CREATE UNIQUE INDEX uq_student_groups_code ON student_groups (class_id, TRIM(group_code) COLLATE NOCASE);
+CREATE UNIQUE INDEX uq_student_groups_name ON student_groups (class_id, TRIM(name) COLLATE NOCASE);
+
+-- 18. teacher_time_off
+CREATE TABLE teacher_time_off (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    teacher_id INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    bell_period_id INTEGER,
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    FOREIGN KEY (academic_year_id, teacher_id, session_id) REFERENCES teacher_sessions(academic_year_id, teacher_id, session_id) ON DELETE CASCADE,
+    FOREIGN KEY (bell_period_id) REFERENCES bell_periods(id) ON DELETE SET NULL,
+    CHECK (end_minute > start_minute)
+);
+CREATE UNIQUE INDEX uq_teacher_time_off_slot
+    ON teacher_time_off (academic_year_id, session_id, teacher_id, day_of_week, start_minute, end_minute);
+
+-- 19. subject_time_off
+CREATE TABLE subject_time_off (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    subject_id INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    bell_period_id INTEGER,
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+    FOREIGN KEY (bell_period_id) REFERENCES bell_periods(id) ON DELETE SET NULL,
+    CHECK (end_minute > start_minute)
+);
+CREATE UNIQUE INDEX uq_subject_time_off_slot
+    ON subject_time_off (academic_year_id, session_id, subject_id, day_of_week, start_minute, end_minute);
+
+-- 20. class_time_off
+CREATE TABLE class_time_off (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    class_id INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    bell_period_id INTEGER,
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    FOREIGN KEY (class_id, academic_year_id, session_id) REFERENCES classes(id, academic_year_id, session_id) ON DELETE CASCADE,
+    FOREIGN KEY (bell_period_id) REFERENCES bell_periods(id) ON DELETE SET NULL,
+    CHECK (end_minute > start_minute)
+);
+CREATE UNIQUE INDEX uq_class_time_off_slot
+    ON class_time_off (academic_year_id, session_id, class_id, day_of_week, start_minute, end_minute);
+
+-- 21. room_time_off
+CREATE TABLE room_time_off (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    room_id INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    bell_period_id INTEGER,
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+    FOREIGN KEY (bell_period_id) REFERENCES bell_periods(id) ON DELETE SET NULL,
+    CHECK (end_minute > start_minute)
+);
+CREATE UNIQUE INDEX uq_room_time_off_slot
+    ON room_time_off (academic_year_id, session_id, room_id, day_of_week, start_minute, end_minute);
+
+-- 22. teaching_assignments
+CREATE TABLE teaching_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    subject_id INTEGER NOT NULL,
+    assignment_type TEXT NOT NULL DEFAULT 'SINGLE' CHECK (assignment_type IN ('SINGLE', 'COMBINED')),
+    combined_group_code TEXT,
+    lessons_per_week INTEGER NOT NULL CHECK (lessons_per_week BETWEEN 1 AND 5),
+    periods_per_lesson INTEGER NOT NULL CHECK (periods_per_lesson IN (1, 2, 3)),
+    room_id INTEGER,
+    room_periods_per_cycle INTEGER,
+    room_frequency TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE RESTRICT,
+    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE RESTRICT,
+    UNIQUE (id, academic_year_id, session_id),
+    UNIQUE (id, academic_year_id, session_id, subject_id),
+    CHECK (
+        (assignment_type = 'SINGLE' AND combined_group_code IS NULL)
+        OR
+        (assignment_type = 'COMBINED' AND combined_group_code IS NOT NULL AND LENGTH(TRIM(combined_group_code)) > 0)
+    ),
+    CHECK (
+        (
+            room_id IS NULL
+            AND room_periods_per_cycle IS NULL
+            AND room_frequency IS NULL
+        )
+        OR
+        (
+            room_id IS NOT NULL
+            AND room_periods_per_cycle IS NOT NULL
+            AND room_frequency IS NOT NULL
+            AND room_frequency IN ('WEEKLY', 'FORTNIGHTLY', 'MONTHLY')
+            AND room_periods_per_cycle > 0
+            AND room_periods_per_cycle % periods_per_lesson = 0
+            AND (
+                room_frequency != 'WEEKLY'
+                OR room_periods_per_cycle <= (lessons_per_week * periods_per_lesson)
+            )
+        )
+    )
+);
+CREATE UNIQUE INDEX uq_ta_combined_code
+    ON teaching_assignments (academic_year_id, session_id, TRIM(combined_group_code) COLLATE NOCASE)
+    WHERE combined_group_code IS NOT NULL;
+
+-- 23. teaching_assignment_targets
+CREATE TABLE teaching_assignment_targets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teaching_assignment_id INTEGER NOT NULL,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    class_id INTEGER NOT NULL,
+    student_group_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (teaching_assignment_id, academic_year_id, session_id)
+        REFERENCES teaching_assignments(id, academic_year_id, session_id) ON DELETE CASCADE,
+    FOREIGN KEY (class_id, academic_year_id, session_id)
+        REFERENCES classes(id, academic_year_id, session_id) ON DELETE CASCADE,
+    FOREIGN KEY (student_group_id) REFERENCES student_groups(id) ON DELETE CASCADE,
+    UNIQUE (teaching_assignment_id, class_id)
+);
+
+-- 24. teaching_assignment_teachers
+CREATE TABLE teaching_assignment_teachers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teaching_assignment_id INTEGER NOT NULL,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    subject_id INTEGER NOT NULL,
+    teacher_id INTEGER NOT NULL,
+    is_lead INTEGER NOT NULL DEFAULT 1 CHECK (is_lead IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (teaching_assignment_id, academic_year_id, session_id, subject_id)
+        REFERENCES teaching_assignments(id, academic_year_id, session_id, subject_id) ON DELETE CASCADE,
+    FOREIGN KEY (academic_year_id, teacher_id, session_id)
+        REFERENCES teacher_sessions(academic_year_id, teacher_id, session_id) ON DELETE RESTRICT,
+    FOREIGN KEY (academic_year_id, teacher_id, subject_id)
+        REFERENCES teacher_subjects(academic_year_id, teacher_id, subject_id) ON DELETE RESTRICT,
+    UNIQUE (teaching_assignment_id, teacher_id)
+);
+
+-- 25. teaching_assignment_locked_slots
+CREATE TABLE teaching_assignment_locked_slots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teaching_assignment_id INTEGER NOT NULL,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (teaching_assignment_id, academic_year_id, session_id)
+        REFERENCES teaching_assignments(id, academic_year_id, session_id) ON DELETE CASCADE,
+    UNIQUE (teaching_assignment_id, day_of_week),
+    CHECK (end_minute > start_minute)
+);
+
+-- 26. timetable_versions
+CREATE TABLE timetable_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    version_number INTEGER NOT NULL CHECK (version_number >= 1),
+    version_name TEXT NOT NULL CHECK (LENGTH(TRIM(version_name)) > 0),
+    effective_date TEXT CHECK (effective_date IS NULL OR effective_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    source_type TEXT NOT NULL DEFAULT 'MANUAL' CHECK (source_type IN ('SOLVER', 'MANUAL', 'CLONED')),
+    notes TEXT,
+    saved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    UNIQUE (id, academic_year_id, session_id),
+    UNIQUE (academic_year_id, session_id, version_number)
+);
+CREATE UNIQUE INDEX uq_timetable_versions_name ON timetable_versions (academic_year_id, session_id, TRIM(version_name) COLLATE NOCASE);
+
+-- 27. timetable_workspace_autosaves
+CREATE TABLE timetable_workspace_autosaves (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    base_timetable_version_id INTEGER,
+    autosave_kind TEXT NOT NULL DEFAULT 'AUTOSAVE' CHECK (autosave_kind IN ('AUTOSAVE', 'MANUAL_DRAFT')),
+    payload_json TEXT NOT NULL CHECK (LENGTH(TRIM(payload_json)) > 0),
+    is_dirty INTEGER NOT NULL DEFAULT 1 CHECK (is_dirty IN (0, 1)),
+    autosaved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (session_id, academic_year_id) REFERENCES school_sessions(id, academic_year_id) ON DELETE CASCADE,
+    FOREIGN KEY (base_timetable_version_id) REFERENCES timetable_versions(id) ON DELETE SET NULL,
+    UNIQUE (academic_year_id, session_id)
+);
+
+-- 28. timetable_lessons
+CREATE TABLE timetable_lessons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timetable_version_id INTEGER NOT NULL,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    teaching_assignment_id INTEGER,
+    subject_id INTEGER NOT NULL,
+    assignment_type TEXT NOT NULL CHECK (assignment_type IN ('SINGLE', 'COMBINED')),
+    combined_group_code TEXT,
+    lessons_per_week INTEGER NOT NULL CHECK (lessons_per_week BETWEEN 1 AND 5),
+    periods_per_lesson INTEGER NOT NULL CHECK (periods_per_lesson IN (1, 2, 3)),
+    room_id INTEGER,
+    room_periods_per_cycle INTEGER,
+    room_frequency TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (timetable_version_id, academic_year_id, session_id)
+        REFERENCES timetable_versions(id, academic_year_id, session_id) ON DELETE CASCADE,
+    FOREIGN KEY (teaching_assignment_id) REFERENCES teaching_assignments(id) ON DELETE SET NULL,
+    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE RESTRICT,
+    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE RESTRICT,
+    UNIQUE (id, timetable_version_id),
+    UNIQUE (id, timetable_version_id, academic_year_id, session_id),
+    UNIQUE (id, timetable_version_id, periods_per_lesson),
+    CHECK (
+        (assignment_type = 'SINGLE' AND combined_group_code IS NULL)
+        OR
+        (assignment_type = 'COMBINED' AND combined_group_code IS NOT NULL AND LENGTH(TRIM(combined_group_code)) > 0)
+    ),
+    CHECK (
+        (
+            room_id IS NULL
+            AND room_periods_per_cycle IS NULL
+            AND room_frequency IS NULL
+        )
+        OR
+        (
+            room_id IS NOT NULL
+            AND room_periods_per_cycle IS NOT NULL
+            AND room_frequency IS NOT NULL
+            AND room_frequency IN ('WEEKLY', 'FORTNIGHTLY', 'MONTHLY')
+            AND room_periods_per_cycle > 0
+            AND room_periods_per_cycle % periods_per_lesson = 0
+            AND (
+                room_frequency != 'WEEKLY'
+                OR room_periods_per_cycle <= (lessons_per_week * periods_per_lesson)
+            )
+        )
+    )
+);
+
+-- 29. timetable_lesson_targets
+CREATE TABLE timetable_lesson_targets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timetable_version_id INTEGER NOT NULL,
+    timetable_lesson_id INTEGER NOT NULL,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    class_id INTEGER NOT NULL,
+    student_group_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (timetable_lesson_id, timetable_version_id, academic_year_id, session_id)
+        REFERENCES timetable_lessons(id, timetable_version_id, academic_year_id, session_id) ON DELETE CASCADE,
+    FOREIGN KEY (class_id, academic_year_id, session_id)
+        REFERENCES classes(id, academic_year_id, session_id) ON DELETE RESTRICT,
+    FOREIGN KEY (student_group_id) REFERENCES student_groups(id) ON DELETE RESTRICT,
+    UNIQUE (id, timetable_version_id, timetable_lesson_id),
+    UNIQUE (id, timetable_version_id, timetable_lesson_id, class_id),
+    UNIQUE (timetable_lesson_id, class_id)
+);
+
+-- 30. timetable_lesson_teachers
+CREATE TABLE timetable_lesson_teachers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timetable_version_id INTEGER NOT NULL,
+    timetable_lesson_id INTEGER NOT NULL,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    teacher_id INTEGER NOT NULL,
+    is_lead INTEGER NOT NULL DEFAULT 1 CHECK (is_lead IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (timetable_lesson_id, timetable_version_id, academic_year_id, session_id)
+        REFERENCES timetable_lessons(id, timetable_version_id, academic_year_id, session_id) ON DELETE CASCADE,
+    FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE RESTRICT,
+    UNIQUE (timetable_lesson_id, teacher_id)
+);
+
+-- 31. timetable_entries
+CREATE TABLE timetable_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timetable_version_id INTEGER NOT NULL,
+    timetable_lesson_id INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    is_locked INTEGER NOT NULL DEFAULT 0 CHECK (is_locked IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (timetable_lesson_id, timetable_version_id)
+        REFERENCES timetable_lessons(id, timetable_version_id) ON DELETE CASCADE,
+    UNIQUE (id, timetable_version_id),
+    UNIQUE (id, timetable_version_id, timetable_lesson_id),
+    UNIQUE (id, timetable_version_id, timetable_lesson_id, day_of_week),
+    UNIQUE (id, timetable_version_id, timetable_lesson_id, day_of_week, start_minute, end_minute),
+    UNIQUE (timetable_version_id, timetable_lesson_id, day_of_week),
+    CHECK (end_minute > start_minute)
+);
+
+-- 32. timetable_entry_target_periods
+CREATE TABLE timetable_entry_target_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timetable_version_id INTEGER NOT NULL,
+    timetable_entry_id INTEGER NOT NULL,
+    timetable_lesson_id INTEGER NOT NULL,
+    timetable_lesson_target_id INTEGER NOT NULL,
+    class_id INTEGER NOT NULL,
+    bell_period_id INTEGER NOT NULL,
+    period_sequence INTEGER NOT NULL CHECK (period_sequence IN (1, 2, 3)),
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (timetable_entry_id, timetable_version_id, timetable_lesson_id)
+        REFERENCES timetable_entries(id, timetable_version_id, timetable_lesson_id) ON DELETE CASCADE,
+    FOREIGN KEY (timetable_lesson_target_id, timetable_version_id, timetable_lesson_id, class_id)
+        REFERENCES timetable_lesson_targets(id, timetable_version_id, timetable_lesson_id, class_id) ON DELETE CASCADE,
+    FOREIGN KEY (bell_period_id) REFERENCES bell_periods(id) ON DELETE RESTRICT,
+    UNIQUE (timetable_entry_id, timetable_lesson_target_id, period_sequence),
+    UNIQUE (timetable_entry_id, timetable_lesson_target_id, bell_period_id),
+    CHECK (end_minute > start_minute)
+);
+
+-- 33. special_room_schedules
+CREATE TABLE special_room_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    timetable_version_id INTEGER NOT NULL,
+    schedule_name TEXT NOT NULL CHECK (LENGTH(TRIM(schedule_name)) > 0),
+    start_date TEXT NOT NULL CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    end_date TEXT NOT NULL CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    solver_status TEXT NOT NULL DEFAULT 'SOLVED' CHECK (solver_status IN ('SOLVED', 'PARTIAL', 'MANUAL')),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (timetable_version_id, academic_year_id, session_id)
+        REFERENCES timetable_versions(id, academic_year_id, session_id) ON DELETE CASCADE,
+    UNIQUE (id, timetable_version_id),
+    CHECK (end_date >= start_date)
+);
+
+-- 34. special_room_allocations
+CREATE TABLE special_room_allocations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    special_room_schedule_id INTEGER NOT NULL,
+    timetable_version_id INTEGER NOT NULL,
+    timetable_lesson_id INTEGER NOT NULL,
+    timetable_entry_id INTEGER NOT NULL,
+    room_id INTEGER NOT NULL,
+    allocation_date TEXT NOT NULL CHECK (allocation_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    cycle_type TEXT NOT NULL CHECK (cycle_type IN ('WEEKLY', 'FORTNIGHTLY', 'MONTHLY')),
+    cycle_key TEXT NOT NULL CHECK (LENGTH(TRIM(cycle_key)) > 0),
+    periods_used INTEGER NOT NULL CHECK (periods_used IN (1, 2, 3)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (special_room_schedule_id, timetable_version_id)
+        REFERENCES special_room_schedules(id, timetable_version_id) ON DELETE CASCADE,
+    FOREIGN KEY (timetable_lesson_id, timetable_version_id, periods_used)
+        REFERENCES timetable_lessons(id, timetable_version_id, periods_per_lesson) ON DELETE CASCADE,
+    FOREIGN KEY (timetable_entry_id, timetable_version_id, timetable_lesson_id, day_of_week)
+        REFERENCES timetable_entries(id, timetable_version_id, timetable_lesson_id, day_of_week) ON DELETE CASCADE,
+    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE RESTRICT,
+    UNIQUE (special_room_schedule_id, timetable_lesson_id, allocation_date),
+    UNIQUE (id, special_room_schedule_id, timetable_version_id, timetable_lesson_id, timetable_entry_id, room_id, allocation_date, day_of_week)
+);
+
+-- 35. special_room_allocation_slots
+CREATE TABLE special_room_allocation_slots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    special_room_allocation_id INTEGER NOT NULL,
+    special_room_schedule_id INTEGER NOT NULL,
+    timetable_version_id INTEGER NOT NULL,
+    timetable_lesson_id INTEGER NOT NULL,
+    timetable_entry_id INTEGER NOT NULL,
+    room_id INTEGER NOT NULL,
+    allocation_date TEXT NOT NULL CHECK (allocation_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    slot_sequence INTEGER NOT NULL CHECK (slot_sequence IN (1, 2, 3)),
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (special_room_allocation_id, special_room_schedule_id, timetable_version_id, timetable_lesson_id, timetable_entry_id, room_id, allocation_date, day_of_week)
+        REFERENCES special_room_allocations(id, special_room_schedule_id, timetable_version_id, timetable_lesson_id, timetable_entry_id, room_id, allocation_date, day_of_week) ON DELETE CASCADE,
+    FOREIGN KEY (timetable_entry_id, timetable_version_id, timetable_lesson_id, day_of_week)
+        REFERENCES timetable_entries(id, timetable_version_id, timetable_lesson_id, day_of_week) ON DELETE CASCADE,
+    UNIQUE (special_room_allocation_id, slot_sequence),
+    UNIQUE (special_room_allocation_id, start_minute, end_minute),
+    CHECK (end_minute > start_minute)
+);
+
+-- 36. absence_reasons
+CREATE TABLE absence_reasons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL CHECK (LENGTH(TRIM(name)) > 0),
+    description TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE UNIQUE INDEX uq_absence_reasons_name ON absence_reasons (TRIM(name) COLLATE NOCASE);
+
+-- 37. teacher_absences
+CREATE TABLE teacher_absences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    teacher_id INTEGER NOT NULL,
+    absence_reason_id INTEGER NOT NULL,
+    absence_date TEXT NOT NULL CHECK (absence_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    absence_scope TEXT NOT NULL DEFAULT 'FULL_DAY' CHECK (absence_scope IN ('FULL_DAY', 'PARTIAL')),
+    start_minute INTEGER CHECK (start_minute IS NULL OR start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER CHECK (end_minute IS NULL OR end_minute BETWEEN 1 AND 1440),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (academic_year_id, teacher_id, session_id)
+        REFERENCES teacher_sessions(academic_year_id, teacher_id, session_id) ON DELETE RESTRICT,
+    FOREIGN KEY (absence_reason_id) REFERENCES absence_reasons(id) ON DELETE RESTRICT,
+    UNIQUE (id, academic_year_id, session_id, teacher_id, absence_date),
+    UNIQUE (academic_year_id, session_id, teacher_id, absence_date),
+    CHECK (
+        (absence_scope = 'FULL_DAY' AND start_minute IS NULL AND end_minute IS NULL)
+        OR
+        (absence_scope = 'PARTIAL' AND start_minute IS NOT NULL AND end_minute IS NOT NULL AND end_minute > start_minute)
+    )
+);
+
+-- 38. relief_batches
+CREATE TABLE relief_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    timetable_version_id INTEGER NOT NULL,
+    relief_date TEXT NOT NULL CHECK (relief_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    batch_status TEXT NOT NULL DEFAULT 'OPEN' CHECK (batch_status IN ('OPEN', 'CONFIRMED', 'CANCELLED')),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (timetable_version_id, academic_year_id, session_id)
+        REFERENCES timetable_versions(id, academic_year_id, session_id) ON DELETE RESTRICT,
+    UNIQUE (id, academic_year_id, session_id, timetable_version_id, relief_date)
+);
+
+-- 39. relief_assignments
+CREATE TABLE relief_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    relief_batch_id INTEGER NOT NULL,
+    academic_year_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
+    timetable_version_id INTEGER NOT NULL,
+    teacher_absence_id INTEGER NOT NULL,
+    relief_date TEXT NOT NULL CHECK (relief_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    absent_teacher_id INTEGER NOT NULL,
+    relief_teacher_id INTEGER,
+    timetable_lesson_id INTEGER NOT NULL,
+    timetable_entry_id INTEGER NOT NULL,
+    subject_id INTEGER NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    start_minute INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
+    end_minute INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
+    status TEXT NOT NULL DEFAULT 'ASSIGNED' CHECK (status IN ('ASSIGNED', 'UNRESOLVED', 'CANCELLED')),
+    is_conflict_overridden INTEGER NOT NULL DEFAULT 0 CHECK (is_conflict_overridden IN (0, 1)),
+    override_conflicts_json TEXT,
+    absent_teacher_short_name_snapshot TEXT NOT NULL CHECK (LENGTH(TRIM(absent_teacher_short_name_snapshot)) > 0),
+    absent_teacher_name_snapshot TEXT NOT NULL CHECK (LENGTH(TRIM(absent_teacher_name_snapshot)) > 0),
+    relief_teacher_short_name_snapshot TEXT,
+    relief_teacher_name_snapshot TEXT,
+    subject_short_name_snapshot TEXT NOT NULL CHECK (LENGTH(TRIM(subject_short_name_snapshot)) > 0),
+    subject_name_snapshot TEXT NOT NULL CHECK (LENGTH(TRIM(subject_name_snapshot)) > 0),
+    target_classes_snapshot_json TEXT NOT NULL CHECK (LENGTH(TRIM(target_classes_snapshot_json)) > 0),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (relief_batch_id, academic_year_id, session_id, timetable_version_id, relief_date)
+        REFERENCES relief_batches(id, academic_year_id, session_id, timetable_version_id, relief_date) ON DELETE RESTRICT,
+    FOREIGN KEY (timetable_version_id) REFERENCES timetable_versions(id) ON DELETE RESTRICT,
+    FOREIGN KEY (teacher_absence_id, academic_year_id, session_id, absent_teacher_id, relief_date)
+        REFERENCES teacher_absences(id, academic_year_id, session_id, teacher_id, absence_date) ON DELETE RESTRICT,
+    FOREIGN KEY (relief_teacher_id) REFERENCES teachers(id) ON DELETE RESTRICT,
+    FOREIGN KEY (timetable_entry_id, timetable_version_id, timetable_lesson_id, day_of_week, start_minute, end_minute)
+        REFERENCES timetable_entries(id, timetable_version_id, timetable_lesson_id, day_of_week, start_minute, end_minute) ON DELETE RESTRICT,
+    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE RESTRICT,
+    UNIQUE (relief_batch_id, timetable_entry_id, absent_teacher_id),
+    CHECK (end_minute > start_minute),
+    CHECK (relief_teacher_id IS NULL OR relief_teacher_id != absent_teacher_id),
+    CHECK (
+        (
+            relief_teacher_id IS NULL
+            AND relief_teacher_short_name_snapshot IS NULL
+            AND relief_teacher_name_snapshot IS NULL
+        )
+        OR
+        (
+            relief_teacher_id IS NOT NULL
+            AND relief_teacher_short_name_snapshot IS NOT NULL AND LENGTH(TRIM(relief_teacher_short_name_snapshot)) > 0
+            AND relief_teacher_name_snapshot IS NOT NULL AND LENGTH(TRIM(relief_teacher_name_snapshot)) > 0
+        )
+    ),
+    CHECK (
+        (status = 'ASSIGNED' AND relief_teacher_id IS NOT NULL)
+        OR
+        (status = 'UNRESOLVED' AND relief_teacher_id IS NULL)
+        OR
+        (status = 'CANCELLED')
+    ),
+    CHECK (
+        (is_conflict_overridden = 0 AND override_conflicts_json IS NULL)
+        OR
+        (is_conflict_overridden = 1 AND override_conflicts_json IS NOT NULL AND LENGTH(TRIM(override_conflicts_json)) > 0)
+    )
+);
+
+-- 40. import_batches
+CREATE TABLE import_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER,
+    session_id INTEGER,
+    entity_scope TEXT NOT NULL CHECK (entity_scope IN ('TEACHERS', 'SUBJECTS', 'CLASSES', 'ROOMS', 'TEACHING_ASSIGNMENTS')),
+    import_mode TEXT NOT NULL CHECK (import_mode IN ('ADD_NEW', 'ADD_AND_UPDATE')),
+    source_file_name TEXT NOT NULL CHECK (LENGTH(TRIM(source_file_name)) > 0),
+    total_rows INTEGER NOT NULL DEFAULT 0 CHECK (total_rows >= 0),
+    inserted_rows INTEGER NOT NULL DEFAULT 0 CHECK (inserted_rows >= 0),
+    updated_rows INTEGER NOT NULL DEFAULT 0 CHECK (updated_rows >= 0),
+    skipped_rows INTEGER NOT NULL DEFAULT 0 CHECK (skipped_rows >= 0),
+    error_rows INTEGER NOT NULL DEFAULT 0 CHECK (error_rows >= 0),
+    status TEXT NOT NULL DEFAULT 'COMPLETED' CHECK (status IN ('COMPLETED', 'PARTIAL', 'FAILED')),
+    details_json TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE SET NULL,
+    FOREIGN KEY (session_id) REFERENCES school_sessions(id) ON DELETE SET NULL
+);
+
+-- 41. audit_logs
+CREATE TABLE audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    academic_year_id INTEGER,
+    session_id INTEGER,
+    entity_type TEXT NOT NULL CHECK (LENGTH(TRIM(entity_type)) > 0),
+    entity_id INTEGER,
+    action TEXT NOT NULL CHECK (LENGTH(TRIM(action)) > 0),
+    actor_name TEXT NOT NULL DEFAULT 'LOCAL_USER',
+    summary TEXT NOT NULL CHECK (LENGTH(TRIM(summary)) > 0),
+    old_values_json TEXT,
+    new_values_json TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE SET NULL,
+    FOREIGN KEY (session_id) REFERENCES school_sessions(id) ON DELETE SET NULL
+);
+
+-- 42. app_settings
+CREATE TABLE app_settings (
+    setting_key TEXT PRIMARY KEY CHECK (LENGTH(TRIM(setting_key)) > 0),
+    setting_value TEXT NOT NULL,
+    value_type TEXT NOT NULL DEFAULT 'STRING' CHECK (value_type IN ('STRING', 'INTEGER', 'BOOLEAN', 'JSON')),
+    description TEXT,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+7E. Lengkap SQLite CREATE TRIGGER (64 Trigger)
+SQL
+-- 1. Pertindihan & Perlindungan Bell Periods
+CREATE TRIGGER trg_bell_periods_no_overlap_ins
+BEFORE INSERT ON bell_periods
+BEGIN
+    SELECT RAISE(ABORT, 'Bell period overlaps with existing period in the same schedule')
+    WHERE EXISTS (
+        SELECT 1 FROM bell_periods bp
+        WHERE bp.bell_schedule_id = NEW.bell_schedule_id
+          AND bp.start_minute < NEW.end_minute
+          AND NEW.start_minute < bp.end_minute
+    );
+END;
+
+CREATE TRIGGER trg_bell_periods_no_overlap_upd
+BEFORE UPDATE OF bell_schedule_id, start_minute, end_minute ON bell_periods
+BEGIN
+    SELECT RAISE(ABORT, 'Bell period overlaps with existing period in the same schedule')
+    WHERE EXISTS (
+        SELECT 1 FROM bell_periods bp
+        WHERE bp.bell_schedule_id = NEW.bell_schedule_id
+          AND bp.id != OLD.id
+          AND bp.start_minute < NEW.end_minute
+          AND NEW.start_minute < bp.end_minute
+    );
+END;
+
+CREATE TRIGGER trg_bell_periods_protect_referenced_upd
+BEFORE UPDATE OF bell_schedule_id, period_type, is_schedulable, start_minute, end_minute ON bell_periods
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot alter timing/type of bell_period referenced by timetable_entry_target_periods')    WHERE EXISTS (
+        SELECT 1 FROM timetable_entry_target_periods tetp WHERE tetp.bell_period_id = OLD.id
+    );
+END;
+
+-- 2. Bell Schedule Day Overrides & School Holidays
+CREATE TRIGGER trg_bs_day_override_level_ins
+BEFORE INSERT ON bell_schedule_day_overrides
+WHEN NEW.education_level_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'education_level_id does not belong to session_id')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM education_levels el
+        WHERE el.id = NEW.education_level_id AND el.session_id = NEW.session_id
+    );
+END;
+
+CREATE TRIGGER trg_bs_day_override_level_upd
+BEFORE UPDATE OF session_id, education_level_id ON bell_schedule_day_overrides
+WHEN NEW.education_level_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'education_level_id does not belong to session_id')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM education_levels el
+        WHERE el.id = NEW.education_level_id AND el.session_id = NEW.session_id
+    );
+END;
+
+CREATE TRIGGER trg_school_holidays_session_ins
+BEFORE INSERT ON school_holidays
+WHEN NEW.session_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'session_id does not belong to academic_year_id')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM school_sessions ss
+        WHERE ss.id = NEW.session_id AND ss.academic_year_id = NEW.academic_year_id
+    );
+END;
+
+CREATE TRIGGER trg_school_holidays_session_upd
+BEFORE UPDATE OF academic_year_id, session_id ON school_holidays
+WHEN NEW.session_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'session_id does not belong to academic_year_id')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM school_sessions ss
+        WHERE ss.id = NEW.session_id AND ss.academic_year_id = NEW.academic_year_id
+    );
+END;
+
+-- 3. Integriti bell_period_id untuk 4 Jadual Time-Off
+CREATE TRIGGER trg_teacher_time_off_bp_ins
+BEFORE INSERT ON teacher_time_off
+WHEN NEW.bell_period_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'teacher_time_off bell_period_id must belong to session_id and match start/end minute')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM bell_periods bp
+        JOIN bell_schedules bs ON bs.id = bp.bell_schedule_id
+        WHERE bp.id = NEW.bell_period_id
+          AND bs.session_id = NEW.session_id
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+    );
+END;
+
+CREATE TRIGGER trg_teacher_time_off_bp_upd
+BEFORE UPDATE OF session_id, bell_period_id, start_minute, end_minute ON teacher_time_off
+WHEN NEW.bell_period_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'teacher_time_off bell_period_id must belong to session_id and match start/end minute')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM bell_periods bp
+        JOIN bell_schedules bs ON bs.id = bp.bell_schedule_id
+        WHERE bp.id = NEW.bell_period_id
+          AND bs.session_id = NEW.session_id
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+    );
+END;
+
+CREATE TRIGGER trg_subject_time_off_bp_ins
+BEFORE INSERT ON subject_time_off
+WHEN NEW.bell_period_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'subject_time_off bell_period_id must belong to session_id and match start/end minute')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM bell_periods bp
+        JOIN bell_schedules bs ON bs.id = bp.bell_schedule_id
+        WHERE bp.id = NEW.bell_period_id
+          AND bs.session_id = NEW.session_id
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+    );
+END;
+
+CREATE TRIGGER trg_subject_time_off_bp_upd
+BEFORE UPDATE OF session_id, bell_period_id, start_minute, end_minute ON subject_time_off
+WHEN NEW.bell_period_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'subject_time_off bell_period_id must belong to session_id and match start/end minute')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM bell_periods bp
+        JOIN bell_schedules bs ON bs.id = bp.bell_schedule_id
+        WHERE bp.id = NEW.bell_period_id
+          AND bs.session_id = NEW.session_id
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+    );
+END;
+
+CREATE TRIGGER trg_room_time_off_bp_ins
+BEFORE INSERT ON room_time_off
+WHEN NEW.bell_period_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'room_time_off bell_period_id must belong to session_id and match start/end minute')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM bell_periods bp
+        JOIN bell_schedules bs ON bs.id = bp.bell_schedule_id
+        WHERE bp.id = NEW.bell_period_id
+          AND bs.session_id = NEW.session_id
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+    );
+END;
+
+CREATE TRIGGER trg_room_time_off_bp_upd
+BEFORE UPDATE OF session_id, bell_period_id, start_minute, end_minute ON room_time_off
+WHEN NEW.bell_period_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'room_time_off bell_period_id must belong to session_id and match start/end minute')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM bell_periods bp
+        JOIN bell_schedules bs ON bs.id = bp.bell_schedule_id
+        WHERE bp.id = NEW.bell_period_id
+          AND bs.session_id = NEW.session_id
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+    );
+END;
+
+CREATE TRIGGER trg_class_time_off_bp_ins
+BEFORE INSERT ON class_time_off
+WHEN NEW.bell_period_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'class_time_off bell_period_id must belong to resolved bell schedule of class/day and match start/end minute')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM classes c
+        JOIN bell_periods bp ON bp.id = NEW.bell_period_id
+        WHERE c.id = NEW.class_id
+          AND c.session_id = NEW.session_id
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+          AND bp.bell_schedule_id = COALESCE(
+              (SELECT bdo.bell_schedule_id FROM bell_schedule_day_overrides bdo
+               WHERE bdo.session_id = c.session_id AND bdo.education_level_id = c.education_level_id AND bdo.day_of_week = NEW.day_of_week),
+              (SELECT bdo.bell_schedule_id FROM bell_schedule_day_overrides bdo
+               WHERE bdo.session_id = c.session_id AND bdo.education_level_id IS NULL AND bdo.day_of_week = NEW.day_of_week),
+              (SELECT blm.bell_schedule_id FROM bell_schedule_level_mappings blm
+               WHERE blm.session_id = c.session_id AND blm.education_level_id = c.education_level_id),
+              (SELECT bs.id FROM bell_schedules bs
+               WHERE bs.session_id = c.session_id AND bs.is_default = 1)
+          )
+    );
+END;
+
+CREATE TRIGGER trg_class_time_off_bp_upd
+BEFORE UPDATE OF session_id, class_id, day_of_week, bell_period_id, start_minute, end_minute ON class_time_off
+WHEN NEW.bell_period_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'class_time_off bell_period_id must belong to resolved bell schedule of class/day and match start/end minute')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM classes c
+        JOIN bell_periods bp ON bp.id = NEW.bell_period_id
+        WHERE c.id = NEW.class_id
+          AND c.session_id = NEW.session_id
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+          AND bp.bell_schedule_id = COALESCE(
+              (SELECT bdo.bell_schedule_id FROM bell_schedule_day_overrides bdo
+               WHERE bdo.session_id = c.session_id AND bdo.education_level_id = c.education_level_id AND bdo.day_of_week = NEW.day_of_week),
+              (SELECT bdo.bell_schedule_id FROM bell_schedule_day_overrides bdo
+               WHERE bdo.session_id = c.session_id AND bdo.education_level_id IS NULL AND bdo.day_of_week = NEW.day_of_week),
+              (SELECT blm.bell_schedule_id FROM bell_schedule_level_mappings blm
+               WHERE blm.session_id = c.session_id AND blm.education_level_id = c.education_level_id),
+              (SELECT bs.id FROM bell_schedules bs
+               WHERE bs.session_id = c.session_id AND bs.is_default = 1)
+          )
+    );
+END;
+
+-- 4. Workspace Autosave base_timetable_version_id Scope Check
+CREATE TRIGGER trg_twa_base_version_ins
+BEFORE INSERT ON timetable_workspace_autosaves
+WHEN NEW.base_timetable_version_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'base_timetable_version_id must belong to the same academic_year_id and session_id')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM timetable_versions tv
+        WHERE tv.id = NEW.base_timetable_version_id
+          AND tv.academic_year_id = NEW.academic_year_id
+          AND tv.session_id = NEW.session_id
+    );
+END;
+
+CREATE TRIGGER trg_twa_base_version_upd
+BEFORE UPDATE OF base_timetable_version_id, academic_year_id, session_id ON timetable_workspace_autosaves
+WHEN NEW.base_timetable_version_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'base_timetable_version_id must belong to the same academic_year_id and session_id')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM timetable_versions tv
+        WHERE tv.id = NEW.base_timetable_version_id
+          AND tv.academic_year_id = NEW.academic_year_id
+          AND tv.session_id = NEW.session_id
+    );
+END;
+
+-- 5. Bilik Khas & Sasaran Tugasan / Pelajaran
+CREATE TRIGGER trg_ta_special_room_ins
+BEFORE INSERT ON teaching_assignments
+WHEN NEW.room_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'teaching_assignments.room_id must reference a SPECIAL room')
+    WHERE NOT EXISTS (SELECT 1 FROM rooms r WHERE r.id = NEW.room_id AND r.room_type = 'SPECIAL');
+END;
+
+CREATE TRIGGER trg_ta_special_room_upd
+BEFORE UPDATE OF room_id ON teaching_assignments
+WHEN NEW.room_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'teaching_assignments.room_id must reference a SPECIAL room')
+    WHERE NOT EXISTS (SELECT 1 FROM rooms r WHERE r.id = NEW.room_id AND r.room_type = 'SPECIAL');
+END;
+
+CREATE TRIGGER trg_tl_special_room_ins
+BEFORE INSERT ON timetable_lessons
+WHEN NEW.room_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'timetable_lessons.room_id must reference a SPECIAL room')
+    WHERE NOT EXISTS (SELECT 1 FROM rooms r WHERE r.id = NEW.room_id AND r.room_type = 'SPECIAL');
+END;
+
+CREATE TRIGGER trg_tl_special_room_upd
+BEFORE UPDATE OF room_id ON timetable_lessons
+WHEN NEW.room_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'timetable_lessons.room_id must reference a SPECIAL room')
+    WHERE NOT EXISTS (SELECT 1 FROM rooms r WHERE r.id = NEW.room_id AND r.room_type = 'SPECIAL');
+END;
+
+CREATE TRIGGER trg_tat_validate_ins
+BEFORE INSERT ON teaching_assignment_targets
+BEGIN
+    SELECT RAISE(ABORT, 'student_group_id does not belong to class_id')
+    WHERE NEW.student_group_id IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM student_groups sg
+          WHERE sg.id = NEW.student_group_id AND sg.class_id = NEW.class_id
+      );
+    SELECT RAISE(ABORT, 'SINGLE teaching_assignment cannot have multiple targets')
+    WHERE EXISTS (
+        SELECT 1 FROM teaching_assignments ta
+        WHERE ta.id = NEW.teaching_assignment_id AND ta.assignment_type = 'SINGLE'
+    ) AND EXISTS (
+        SELECT 1 FROM teaching_assignment_targets tat
+        WHERE tat.teaching_assignment_id = NEW.teaching_assignment_id
+    );
+END;
+
+CREATE TRIGGER trg_tat_validate_upd
+BEFORE UPDATE ON teaching_assignment_targets
+BEGIN
+    SELECT RAISE(ABORT, 'student_group_id does not belong to class_id')
+    WHERE NEW.student_group_id IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM student_groups sg
+          WHERE sg.id = NEW.student_group_id AND sg.class_id = NEW.class_id
+      );
+    SELECT RAISE(ABORT, 'SINGLE teaching_assignment cannot have multiple targets')
+    WHERE EXISTS (
+        SELECT 1 FROM teaching_assignments ta
+        WHERE ta.id = NEW.teaching_assignment_id AND ta.assignment_type = 'SINGLE'
+    ) AND EXISTS (
+        SELECT 1 FROM teaching_assignment_targets tat
+        WHERE tat.teaching_assignment_id = NEW.teaching_assignment_id AND tat.id != OLD.id
+    );
+END;
+
+CREATE TRIGGER trg_tlt_validate_ins
+BEFORE INSERT ON timetable_lesson_targets
+BEGIN
+    SELECT RAISE(ABORT, 'student_group_id does not belong to class_id')
+    WHERE NEW.student_group_id IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM student_groups sg
+          WHERE sg.id = NEW.student_group_id AND sg.class_id = NEW.class_id
+      );
+    SELECT RAISE(ABORT, 'SINGLE timetable_lesson cannot have multiple targets')
+    WHERE EXISTS (
+        SELECT 1 FROM timetable_lessons tl
+        WHERE tl.id = NEW.timetable_lesson_id AND tl.assignment_type = 'SINGLE'
+    ) AND EXISTS (
+        SELECT 1 FROM timetable_lesson_targets tlt
+        WHERE tlt.timetable_lesson_id = NEW.timetable_lesson_id
+    );
+END;
+
+CREATE TRIGGER trg_tlt_validate_upd
+BEFORE UPDATE ON timetable_lesson_targets
+BEGIN
+    SELECT RAISE(ABORT, 'student_group_id does not belong to class_id')
+    WHERE NEW.student_group_id IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM student_groups sg
+          WHERE sg.id = NEW.student_group_id AND sg.class_id = NEW.class_id
+      );
+    SELECT RAISE(ABORT, 'SINGLE timetable_lesson cannot have multiple targets')
+    WHERE EXISTS (
+        SELECT 1 FROM timetable_lessons tl
+        WHERE tl.id = NEW.timetable_lesson_id AND tl.assignment_type = 'SINGLE'
+    ) AND EXISTS (
+        SELECT 1 FROM timetable_lesson_targets tlt
+        WHERE tlt.timetable_lesson_id = NEW.timetable_lesson_id AND tlt.id != OLD.id
+    );
+END;
+
+-- 6. Pemetaan Period Jadual Loceng Sasaran
+CREATE TRIGGER trg_tetp_validate_ins
+BEFORE INSERT ON timetable_entry_target_periods
+BEGIN
+    SELECT RAISE(ABORT, 'bell_period must be teaching/schedulable, match resolved bell schedule of class/day, match start/end minutes, and fit within entry span')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM timetable_entries te
+        JOIN timetable_lessons tl ON tl.id = te.timetable_lesson_id AND tl.timetable_version_id = te.timetable_version_id
+        JOIN classes c ON c.id = NEW.class_id AND c.session_id = tl.session_id
+        JOIN bell_periods bp ON bp.id = NEW.bell_period_id
+        WHERE te.id = NEW.timetable_entry_id
+          AND te.timetable_version_id = NEW.timetable_version_id
+          AND te.timetable_lesson_id = NEW.timetable_lesson_id
+          AND bp.period_type = 'teaching'
+          AND bp.is_schedulable = 1
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+          AND NEW.start_minute >= te.start_minute
+          AND NEW.end_minute <= te.end_minute
+          AND NEW.period_sequence <= tl.periods_per_lesson
+          AND (tl.periods_per_lesson > 1 OR (NEW.start_minute = te.start_minute AND NEW.end_minute = te.end_minute))
+          AND bp.bell_schedule_id = COALESCE(
+              (SELECT bdo.bell_schedule_id FROM bell_schedule_day_overrides bdo
+               WHERE bdo.session_id = c.session_id AND bdo.education_level_id = c.education_level_id AND bdo.day_of_week = te.day_of_week),
+              (SELECT bdo.bell_schedule_id FROM bell_schedule_day_overrides bdo
+               WHERE bdo.session_id = c.session_id AND bdo.education_level_id IS NULL AND bdo.day_of_week = te.day_of_week),
+              (SELECT blm.bell_schedule_id FROM bell_schedule_level_mappings blm
+               WHERE blm.session_id = c.session_id AND blm.education_level_id = c.education_level_id),
+              (SELECT bs.id FROM bell_schedules bs
+               WHERE bs.session_id = c.session_id AND bs.is_default = 1)
+          )
+    );
+    SELECT RAISE(ABORT, 'period_sequence must be strictly contiguous and non-overlapping with existing periods for the target')
+    WHERE EXISTS (
+        SELECT 1 FROM timetable_entry_target_periods prev
+        WHERE prev.timetable_entry_id = NEW.timetable_entry_id
+          AND prev.timetable_lesson_target_id = NEW.timetable_lesson_target_id
+          AND (
+              (prev.period_sequence < NEW.period_sequence AND prev.end_minute > NEW.start_minute)
+              OR
+              (prev.period_sequence = NEW.period_sequence - 1 AND prev.end_minute != NEW.start_minute)
+              OR
+              (prev.period_sequence > NEW.period_sequence AND prev.start_minute < NEW.end_minute)
+              OR
+              (prev.period_sequence = NEW.period_sequence + 1 AND NEW.end_minute != prev.start_minute)
+          )
+    );
+END;
+
+CREATE TRIGGER trg_tetp_validate_upd
+BEFORE UPDATE ON timetable_entry_target_periods
+BEGIN
+    SELECT RAISE(ABORT, 'bell_period must be teaching/schedulable, match resolved bell schedule of class/day, match start/end minutes, and fit within entry span')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM timetable_entries te
+        JOIN timetable_lessons tl ON tl.id = te.timetable_lesson_id AND tl.timetable_version_id = te.timetable_version_id
+        JOIN classes c ON c.id = NEW.class_id AND c.session_id = tl.session_id
+        JOIN bell_periods bp ON bp.id = NEW.bell_period_id
+        WHERE te.id = NEW.timetable_entry_id
+          AND te.timetable_version_id = NEW.timetable_version_id
+          AND te.timetable_lesson_id = NEW.timetable_lesson_id
+          AND bp.period_type = 'teaching'
+          AND bp.is_schedulable = 1
+          AND bp.start_minute = NEW.start_minute
+          AND bp.end_minute = NEW.end_minute
+          AND NEW.start_minute >= te.start_minute
+          AND NEW.end_minute <= te.end_minute
+          AND NEW.period_sequence <= tl.periods_per_lesson
+          AND (tl.periods_per_lesson > 1 OR (NEW.start_minute = te.start_minute AND NEW.end_minute = te.end_minute))
+          AND bp.bell_schedule_id = COALESCE(
+              (SELECT bdo.bell_schedule_id FROM bell_schedule_day_overrides bdo
+               WHERE bdo.session_id = c.session_id AND bdo.education_level_id = c.education_level_id AND bdo.day_of_week = te.day_of_week),
+              (SELECT bdo.bell_schedule_id FROM bell_schedule_day_overrides bdo
+               WHERE bdo.session_id = c.session_id AND bdo.education_level_id IS NULL AND bdo.day_of_week = te.day_of_week),
+              (SELECT blm.bell_schedule_id FROM bell_schedule_level_mappings blm
+               WHERE blm.session_id = c.session_id AND blm.education_level_id = c.education_level_id),
+              (SELECT bs.id FROM bell_schedules bs
+               WHERE bs.session_id = c.session_id AND bs.is_default = 1)
+          )
+    );
+    SELECT RAISE(ABORT, 'period_sequence must be strictly contiguous and non-overlapping with existing periods for the target')
+    WHERE EXISTS (
+        SELECT 1 FROM timetable_entry_target_periods prev
+        WHERE prev.timetable_entry_id = NEW.timetable_entry_id
+          AND prev.timetable_lesson_target_id = NEW.timetable_lesson_target_id
+          AND prev.id != OLD.id
+          AND (
+              (prev.period_sequence < NEW.period_sequence AND prev.end_minute > NEW.start_minute)
+              OR
+              (prev.period_sequence = NEW.period_sequence - 1 AND prev.end_minute != NEW.start_minute)
+              OR
+              (prev.period_sequence > NEW.period_sequence AND prev.start_minute < NEW.end_minute)
+              OR
+              (prev.period_sequence = NEW.period_sequence + 1 AND NEW.end_minute != prev.start_minute)
+          )
+    );
+END;
+
+-- 7. Konflik Student Groups & Double-Booking Guru
+CREATE TRIGGER trg_te_student_group_conflict_ins
+AFTER INSERT ON timetable_entries
+BEGIN
+    SELECT RAISE(ABORT, 'Student group / class timetable conflict detected (SEMUA, same group, or same subject)')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_lesson_targets t_new
+        JOIN timetable_lessons l_new ON l_new.id = NEW.timetable_lesson_id
+        JOIN timetable_entries e_old
+          ON e_old.timetable_version_id = NEW.timetable_version_id
+         AND e_old.day_of_week = NEW.day_of_week
+         AND e_old.timetable_lesson_id != NEW.timetable_lesson_id
+         AND e_old.start_minute < NEW.end_minute
+         AND NEW.start_minute < e_old.end_minute
+        JOIN timetable_lesson_targets t_old
+          ON t_old.timetable_lesson_id = e_old.timetable_lesson_id
+         AND t_old.class_id = t_new.class_id
+        JOIN timetable_lessons l_old ON l_old.id = e_old.timetable_lesson_id
+        WHERE t_new.timetable_lesson_id = NEW.timetable_lesson_id
+          AND (
+              t_new.student_group_id IS NULL
+              OR t_old.student_group_id IS NULL
+              OR t_new.student_group_id = t_old.student_group_id
+              OR l_new.subject_id = l_old.subject_id
+          )
+    );
+    SELECT RAISE(ABORT, 'Class exceeds maximum of 2 concurrent student group lessons at the same instant')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_lesson_targets t_new
+        JOIN timetable_entries pt
+          ON pt.timetable_version_id = NEW.timetable_version_id
+         AND pt.day_of_week = NEW.day_of_week
+         AND pt.start_minute >= NEW.start_minute
+         AND pt.start_minute < NEW.end_minute
+        WHERE t_new.timetable_lesson_id = NEW.timetable_lesson_id
+          AND (
+              SELECT COUNT(DISTINCT e_c.timetable_lesson_id)
+              FROM timetable_entries e_c
+              JOIN timetable_lesson_targets t_c
+                ON t_c.timetable_lesson_id = e_c.timetable_lesson_id
+               AND t_c.class_id = t_new.class_id
+              WHERE e_c.timetable_version_id = NEW.timetable_version_id
+                AND e_c.day_of_week = NEW.day_of_week
+                AND e_c.start_minute <= pt.start_minute
+                AND pt.start_minute < e_c.end_minute
+          ) > 2
+    );
+    SELECT RAISE(ABORT, 'Teacher double-booking conflict detected across overlapping lessons')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_lesson_teachers lt_new
+        JOIN timetable_entries e_old
+          ON e_old.timetable_version_id = NEW.timetable_version_id
+         AND e_old.day_of_week = NEW.day_of_week
+         AND e_old.timetable_lesson_id != NEW.timetable_lesson_id
+         AND e_old.start_minute < NEW.end_minute
+         AND NEW.start_minute < e_old.end_minute
+        JOIN timetable_lesson_teachers lt_old
+          ON lt_old.timetable_lesson_id = e_old.timetable_lesson_id
+         AND lt_old.teacher_id = lt_new.teacher_id
+        WHERE lt_new.timetable_lesson_id = NEW.timetable_lesson_id
+    );
+END;
+
+CREATE TRIGGER trg_te_student_group_conflict_upd
+AFTER UPDATE OF timetable_version_id, timetable_lesson_id, day_of_week, start_minute, end_minute ON timetable_entries
+BEGIN
+    SELECT RAISE(ABORT, 'Student group / class timetable conflict detected (SEMUA, same group, or same subject)')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_lesson_targets t_new
+        JOIN timetable_lessons l_new ON l_new.id = NEW.timetable_lesson_id
+        JOIN timetable_entries e_old
+          ON e_old.timetable_version_id = NEW.timetable_version_id
+         AND e_old.day_of_week = NEW.day_of_week
+         AND e_old.timetable_lesson_id != NEW.timetable_lesson_id
+         AND e_old.start_minute < NEW.end_minute
+         AND NEW.start_minute < e_old.end_minute
+        JOIN timetable_lesson_targets t_old
+          ON t_old.timetable_lesson_id = e_old.timetable_lesson_id
+         AND t_old.class_id = t_new.class_id
+        JOIN timetable_lessons l_old ON l_old.id = e_old.timetable_lesson_id
+        WHERE t_new.timetable_lesson_id = NEW.timetable_lesson_id
+          AND (
+              t_new.student_group_id IS NULL
+              OR t_old.student_group_id IS NULL
+              OR t_new.student_group_id = t_old.student_group_id
+              OR l_new.subject_id = l_old.subject_id
+          )
+    );
+    SELECT RAISE(ABORT, 'Class exceeds maximum of 2 concurrent student group lessons at the same instant')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_lesson_targets t_new
+        JOIN timetable_entries pt
+          ON pt.timetable_version_id = NEW.timetable_version_id
+         AND pt.day_of_week = NEW.day_of_week
+         AND pt.start_minute >= NEW.start_minute
+         AND pt.start_minute < NEW.end_minute
+        WHERE t_new.timetable_lesson_id = NEW.timetable_lesson_id
+          AND (
+              SELECT COUNT(DISTINCT e_c.timetable_lesson_id)
+              FROM timetable_entries e_c
+              JOIN timetable_lesson_targets t_c
+                ON t_c.timetable_lesson_id = e_c.timetable_lesson_id
+               AND t_c.class_id = t_new.class_id
+              WHERE e_c.timetable_version_id = NEW.timetable_version_id
+                AND e_c.day_of_week = NEW.day_of_week
+                AND e_c.start_minute <= pt.start_minute
+                AND pt.start_minute < e_c.end_minute
+          ) > 2
+    );
+    SELECT RAISE(ABORT, 'Teacher double-booking conflict detected across overlapping lessons')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_lesson_teachers lt_new
+        JOIN timetable_entries e_old
+          ON e_old.timetable_version_id = NEW.timetable_version_id
+         AND e_old.day_of_week = NEW.day_of_week
+         AND e_old.timetable_lesson_id != NEW.timetable_lesson_id
+         AND e_old.start_minute < NEW.end_minute
+         AND NEW.start_minute < e_old.end_minute
+        JOIN timetable_lesson_teachers lt_old
+          ON lt_old.timetable_lesson_id = e_old.timetable_lesson_id
+         AND lt_old.teacher_id = lt_new.teacher_id
+        WHERE lt_new.timetable_lesson_id = NEW.timetable_lesson_id
+    );
+END;
+
+CREATE TRIGGER trg_tlt_student_group_conflict_ins
+AFTER INSERT ON timetable_lesson_targets
+BEGIN
+    SELECT RAISE(ABORT, 'Student group / class timetable conflict detected on target insert')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_entries e_new
+        JOIN timetable_lessons l_new ON l_new.id = NEW.timetable_lesson_id
+        JOIN timetable_entries e_old
+          ON e_old.timetable_version_id = e_new.timetable_version_id
+         AND e_old.day_of_week = e_new.day_of_week
+         AND e_old.timetable_lesson_id != NEW.timetable_lesson_id
+         AND e_old.start_minute < e_new.end_minute
+         AND e_new.start_minute < e_old.end_minute
+        JOIN timetable_lesson_targets t_old
+          ON t_old.timetable_lesson_id = e_old.timetable_lesson_id
+         AND t_old.class_id = NEW.class_id
+        JOIN timetable_lessons l_old ON l_old.id = e_old.timetable_lesson_id
+        WHERE e_new.timetable_lesson_id = NEW.timetable_lesson_id
+          AND (
+              NEW.student_group_id IS NULL
+              OR t_old.student_group_id IS NULL
+              OR NEW.student_group_id = t_old.student_group_id
+              OR l_new.subject_id = l_old.subject_id
+          )
+    );
+    SELECT RAISE(ABORT, 'Class exceeds maximum of 2 concurrent student group lessons on target insert')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_entries e_new
+        JOIN timetable_entries pt
+          ON pt.timetable_version_id = e_new.timetable_version_id
+         AND pt.day_of_week = e_new.day_of_week
+         AND pt.start_minute >= e_new.start_minute
+         AND pt.start_minute < e_new.end_minute
+        WHERE e_new.timetable_lesson_id = NEW.timetable_lesson_id
+          AND (
+              SELECT COUNT(DISTINCT e_c.timetable_lesson_id)
+              FROM timetable_entries e_c
+              JOIN timetable_lesson_targets t_c
+                ON t_c.timetable_lesson_id = e_c.timetable_lesson_id
+               AND t_c.class_id = NEW.class_id
+              WHERE e_c.timetable_version_id = e_new.timetable_version_id
+                AND e_c.day_of_week = e_new.day_of_week
+                AND e_c.start_minute <= pt.start_minute
+                AND pt.start_minute < e_c.end_minute
+          ) > 2
+    );
+END;
+
+CREATE TRIGGER trg_tlt_student_group_conflict_upd
+AFTER UPDATE OF timetable_version_id, timetable_lesson_id, class_id, student_group_id ON timetable_lesson_targets
+BEGIN
+    SELECT RAISE(ABORT, 'Student group / class timetable conflict detected on target update')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_entries e_new
+        JOIN timetable_lessons l_new ON l_new.id = NEW.timetable_lesson_id
+        JOIN timetable_entries e_old
+          ON e_old.timetable_version_id = e_new.timetable_version_id
+         AND e_old.day_of_week = e_new.day_of_week
+         AND e_old.timetable_lesson_id != NEW.timetable_lesson_id
+         AND e_old.start_minute < e_new.end_minute
+         AND e_new.start_minute < e_old.end_minute
+        JOIN timetable_lesson_targets t_old
+          ON t_old.timetable_lesson_id = e_old.timetable_lesson_id
+         AND t_old.class_id = NEW.class_id
+        JOIN timetable_lessons l_old ON l_old.id = e_old.timetable_lesson_id
+        WHERE e_new.timetable_lesson_id = NEW.timetable_lesson_id
+          AND (
+              NEW.student_group_id IS NULL
+              OR t_old.student_group_id IS NULL
+              OR NEW.student_group_id = t_old.student_group_id
+              OR l_new.subject_id = l_old.subject_id
+          )
+    );
+    SELECT RAISE(ABORT, 'Class exceeds maximum of 2 concurrent student group lessons on target update')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_entries e_new
+        JOIN timetable_entries pt
+          ON pt.timetable_version_id = e_new.timetable_version_id
+         AND pt.day_of_week = e_new.day_of_week
+         AND pt.start_minute >= e_new.start_minute
+         AND pt.start_minute < e_new.end_minute
+        WHERE e_new.timetable_lesson_id = NEW.timetable_lesson_id
+          AND (
+              SELECT COUNT(DISTINCT e_c.timetable_lesson_id)
+              FROM timetable_entries e_c
+              JOIN timetable_lesson_targets t_c
+                ON t_c.timetable_lesson_id = e_c.timetable_lesson_id
+               AND t_c.class_id = NEW.class_id
+              WHERE e_c.timetable_version_id = e_new.timetable_version_id
+                AND e_c.day_of_week = e_new.day_of_week
+                AND e_c.start_minute <= pt.start_minute
+                AND pt.start_minute < e_c.end_minute
+          ) > 2
+    );
+END;
+
+CREATE TRIGGER trg_tlteach_conflict_ins
+AFTER INSERT ON timetable_lesson_teachers
+BEGIN
+    SELECT RAISE(ABORT, 'Teacher double-booking conflict detected on lesson teacher insert')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_entries e_new
+        JOIN timetable_entries e_old
+          ON e_old.timetable_version_id = e_new.timetable_version_id
+         AND e_old.day_of_week = e_new.day_of_week
+         AND e_old.timetable_lesson_id != NEW.timetable_lesson_id
+         AND e_old.start_minute < e_new.end_minute
+         AND e_new.start_minute < e_old.end_minute
+        JOIN timetable_lesson_teachers lt_old
+          ON lt_old.timetable_lesson_id = e_old.timetable_lesson_id
+         AND lt_old.teacher_id = NEW.teacher_id
+        WHERE e_new.timetable_lesson_id = NEW.timetable_lesson_id
+    );
+END;
+
+CREATE TRIGGER trg_tlteach_conflict_upd
+AFTER UPDATE OF timetable_lesson_id, teacher_id ON timetable_lesson_teachers
+BEGIN
+    SELECT RAISE(ABORT, 'Teacher double-booking conflict detected on lesson teacher update')
+    WHERE EXISTS (
+        SELECT 1
+        FROM timetable_entries e_new
+        JOIN timetable_entries e_old
+          ON e_old.timetable_version_id = e_new.timetable_version_id
+         AND e_old.day_of_week = e_new.day_of_week
+         AND e_old.timetable_lesson_id != NEW.timetable_lesson_id
+         AND e_old.start_minute < e_new.end_minute
+         AND e_new.start_minute < e_old.end_minute
+        JOIN timetable_lesson_teachers lt_old
+          ON lt_old.timetable_lesson_id = e_old.timetable_lesson_id
+         AND lt_old.teacher_id = NEW.teacher_id
+        WHERE e_new.timetable_lesson_id = NEW.timetable_lesson_id
+    );
+END;
+
+-- 8. Special Room Allocations & Multi-Slot (Single=1, Double=2, Triple=3)
+CREATE TRIGGER trg_sra_validate_ins
+BEFORE INSERT ON special_room_allocations
+BEGIN
+    SELECT RAISE(ABORT, 'Special room allocation must match lesson room/frequency, active SPECIAL room, schedule date window, and allocation_date weekday')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM special_room_schedules srs
+        JOIN timetable_lessons tl
+          ON tl.id = NEW.timetable_lesson_id
+         AND tl.timetable_version_id = NEW.timetable_version_id
+        JOIN rooms r ON r.id = NEW.room_id
+        WHERE srs.id = NEW.special_room_schedule_id
+          AND r.room_type = 'SPECIAL'
+          AND tl.room_id = NEW.room_id
+          AND tl.room_frequency = NEW.cycle_type
+          AND NEW.allocation_date BETWEEN srs.start_date AND srs.end_date
+          AND (
+              CASE CAST(strftime('%w', NEW.allocation_date) AS INTEGER)
+                  WHEN 0 THEN 7
+                  ELSE CAST(strftime('%w', NEW.allocation_date) AS INTEGER)
+              END
+          ) = NEW.day_of_week
+    );
+END;
+
+CREATE TRIGGER trg_sra_validate_upd
+BEFORE UPDATE ON special_room_allocations
+BEGIN
+    SELECT RAISE(ABORT, 'Special room allocation must match lesson room/frequency, active SPECIAL room, schedule date window, and allocation_date weekday')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM special_room_schedules srs
+        JOIN timetable_lessons tl
+          ON tl.id = NEW.timetable_lesson_id
+         AND tl.timetable_version_id = NEW.timetable_version_id
+        JOIN rooms r ON r.id = NEW.room_id
+        WHERE srs.id = NEW.special_room_schedule_id
+          AND r.room_type = 'SPECIAL'
+          AND tl.room_id = NEW.room_id
+          AND tl.room_frequency = NEW.cycle_type
+          AND NEW.allocation_date BETWEEN srs.start_date AND srs.end_date
+          AND (
+              CASE CAST(strftime('%w', NEW.allocation_date) AS INTEGER)
+                  WHEN 0 THEN 7
+                  ELSE CAST(strftime('%w', NEW.allocation_date) AS INTEGER)
+              END
+          ) = NEW.day_of_week
+    );
+END;
+
+CREATE TRIGGER trg_sras_validate_ins
+BEFORE INSERT ON special_room_allocation_slots
+BEGIN
+    SELECT RAISE(ABORT, 'Slot must satisfy slot_sequence <= periods_used and match an actual teaching period of the timetable_entry')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM special_room_allocations sra
+        JOIN timetable_entry_target_periods tetp
+          ON tetp.timetable_entry_id = NEW.timetable_entry_id
+         AND tetp.timetable_version_id = NEW.timetable_version_id
+         AND tetp.timetable_lesson_id = NEW.timetable_lesson_id
+         AND tetp.period_sequence = NEW.slot_sequence
+         AND tetp.start_minute = NEW.start_minute
+         AND tetp.end_minute = NEW.end_minute
+        WHERE sra.id = NEW.special_room_allocation_id
+          AND NEW.slot_sequence <= sra.periods_used
+    );
+    SELECT RAISE(ABORT, 'Allocation slot_sequence must be strictly contiguous and non-overlapping')
+    WHERE EXISTS (
+        SELECT 1 FROM special_room_allocation_slots sib
+        WHERE sib.special_room_allocation_id = NEW.special_room_allocation_id
+          AND (
+              (sib.slot_sequence < NEW.slot_sequence AND sib.end_minute > NEW.start_minute)
+              OR
+              (sib.slot_sequence = NEW.slot_sequence - 1 AND sib.end_minute != NEW.start_minute)
+              OR
+              (sib.slot_sequence > NEW.slot_sequence AND sib.start_minute < NEW.end_minute)
+              OR
+              (sib.slot_sequence = NEW.slot_sequence + 1 AND NEW.end_minute != sib.start_minute)
+          )
+    );
+END;
+
+CREATE TRIGGER trg_sras_validate_upd
+BEFORE UPDATE ON special_room_allocation_slots
+BEGIN
+    SELECT RAISE(ABORT, 'Slot must satisfy slot_sequence <= periods_used and match an actual teaching period of the timetable_entry')
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM special_room_allocations sra
+        JOIN timetable_entry_target_periods tetp
+          ON tetp.timetable_entry_id = NEW.timetable_entry_id
+         AND tetp.timetable_version_id = NEW.timetable_version_id
+         AND tetp.timetable_lesson_id = NEW.timetable_lesson_id
+         AND tetp.period_sequence = NEW.slot_sequence
+         AND tetp.start_minute = NEW.start_minute
+         AND tetp.end_minute = NEW.end_minute
+        WHERE sra.id = NEW.special_room_allocation_id
+          AND NEW.slot_sequence <= sra.periods_used
+    );
+    SELECT RAISE(ABORT, 'Allocation slot_sequence must be strictly contiguous and non-overlapping')
+    WHERE EXISTS (
+        SELECT 1 FROM special_room_allocation_slots sib
+        WHERE sib.special_room_allocation_id = NEW.special_room_allocation_id
+          AND sib.id != OLD.id
+          AND (
+              (sib.slot_sequence < NEW.slot_sequence AND sib.end_minute > NEW.start_minute)
+              OR
+              (sib.slot_sequence = NEW.slot_sequence - 1 AND sib.end_minute != NEW.start_minute)
+              OR
+              (sib.slot_sequence > NEW.slot_sequence AND sib.start_minute < NEW.end_minute)
+              OR
+              (sib.slot_sequence = NEW.slot_sequence + 1 AND NEW.end_minute != sib.start_minute)
+          )
+    );
+END;
+
+CREATE TRIGGER trg_sras_max_concurrent_ins
+AFTER INSERT ON special_room_allocation_slots
+BEGIN
+    SELECT RAISE(ABORT, 'Special room max_concurrent_classes exceeded at overlapping slot instant')
+    WHERE EXISTS (
+        SELECT 1
+        FROM rooms r
+        JOIN special_room_allocation_slots pt
+          ON pt.special_room_schedule_id = NEW.special_room_schedule_id
+         AND pt.room_id = NEW.room_id
+         AND pt.allocation_date = NEW.allocation_date
+         AND pt.start_minute >= NEW.start_minute
+         AND pt.start_minute < NEW.end_minute
+        WHERE r.id = NEW.room_id
+          AND (
+              SELECT COUNT(DISTINCT tlt.class_id)
+              FROM special_room_allocation_slots s
+              JOIN timetable_lesson_targets tlt
+                ON tlt.timetable_lesson_id = s.timetable_lesson_id
+               AND tlt.timetable_version_id = s.timetable_version_id
+              WHERE s.special_room_schedule_id = NEW.special_room_schedule_id
+                AND s.room_id = NEW.room_id
+                AND s.allocation_date = NEW.allocation_date
+                AND s.start_minute <= pt.start_minute
+                AND pt.start_minute < s.end_minute
+          ) > r.max_concurrent_classes
+    );
+END;
+
+CREATE TRIGGER trg_sras_max_concurrent_upd
+AFTER UPDATE ON special_room_allocation_slots
+BEGIN
+    SELECT RAISE(ABORT, 'Special room max_concurrent_classes exceeded at overlapping slot instant')
+    WHERE EXISTS (
+        SELECT 1
+        FROM rooms r
+        JOIN special_room_allocation_slots pt
+          ON pt.special_room_schedule_id = NEW.special_room_schedule_id
+         AND pt.room_id = NEW.room_id
+         AND pt.allocation_date = NEW.allocation_date
+         AND pt.start_minute >= NEW.start_minute
+         AND pt.start_minute < NEW.end_minute
+        WHERE r.id = NEW.room_id
+          AND (
+              SELECT COUNT(DISTINCT tlt.class_id)
+              FROM special_room_allocation_slots s
+              JOIN timetable_lesson_targets tlt
+                ON tlt.timetable_lesson_id = s.timetable_lesson_id
+               AND tlt.timetable_version_id = s.timetable_version_id
+              WHERE s.special_room_schedule_id = NEW.special_room_schedule_id
+                AND s.room_id = NEW.room_id
+                AND s.allocation_date = NEW.allocation_date
+                AND s.start_minute <= pt.start_minute
+                AND pt.start_minute < s.end_minute
+          ) > r.max_concurrent_classes
+    );
+END;
+
+-- 9. Absence Reasons (hanya sebab aktif dibenarkan untuk rekod baharu)
+CREATE TRIGGER trg_teacher_absences_reason_active_ins
+BEFORE INSERT ON teacher_absences
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot assign an inactive absence_reason to a new teacher_absence')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM absence_reasons ar
+        WHERE ar.id = NEW.absence_reason_id AND ar.is_active = 1
+    );
+END;
+
+CREATE TRIGGER trg_teacher_absences_reason_active_upd
+BEFORE UPDATE OF absence_reason_id ON teacher_absences
+WHEN NEW.absence_reason_id != OLD.absence_reason_id
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot reassign teacher_absence to an inactive absence_reason')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM absence_reasons ar
+        WHERE ar.id = NEW.absence_reason_id AND ar.is_active = 1
+    );
+END;
+
+-- 10. Pengesahan Hari RELIEF & Penguncian Kekal Versi Jadual
+CREATE TRIGGER trg_ra_weekday_ins
+BEFORE INSERT ON relief_assignments
+BEGIN
+    SELECT RAISE(ABORT, 'relief_date ISO weekday does not match timetable_entry day_of_week')
+    WHERE (
+        CASE CAST(strftime('%w', NEW.relief_date) AS INTEGER)
+            WHEN 0 THEN 7
+            ELSE CAST(strftime('%w', NEW.relief_date) AS INTEGER)
+        END
+    ) != NEW.day_of_week;
+END;
+
+CREATE TRIGGER trg_tv_lock_upd
+BEFORE UPDATE ON timetable_versions
+BEGIN
+    SELECT RAISE(ABORT, 'Timetable version is permanently locked because relief_assignments exist')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.id);
+END;
+
+CREATE TRIGGER trg_tv_lock_del
+BEFORE DELETE ON timetable_versions
+BEGIN
+    SELECT RAISE(ABORT, 'Timetable version cannot be deleted because relief_assignments exist')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.id);
+END;
+
+CREATE TRIGGER trg_tl_lock_ins BEFORE INSERT ON timetable_lessons
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_lessons of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = NEW.timetable_version_id);
+END;
+CREATE TRIGGER trg_tl_lock_upd BEFORE UPDATE ON timetable_lessons
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_lessons of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+CREATE TRIGGER trg_tl_lock_del BEFORE DELETE ON timetable_lessons
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete timetable_lessons of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+
+CREATE TRIGGER trg_tlt_lock_ins BEFORE INSERT ON timetable_lesson_targets
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_lesson_targets of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = NEW.timetable_version_id);
+END;
+CREATE TRIGGER trg_tlt_lock_upd BEFORE UPDATE ON timetable_lesson_targets
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_lesson_targets of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+CREATE TRIGGER trg_tlt_lock_del BEFORE DELETE ON timetable_lesson_targets
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete timetable_lesson_targets of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+
+CREATE TRIGGER trg_tlteach_lock_ins BEFORE INSERT ON timetable_lesson_teachers
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_lesson_teachers of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = NEW.timetable_version_id);
+END;
+CREATE TRIGGER trg_tlteach_lock_upd BEFORE UPDATE ON timetable_lesson_teachers
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_lesson_teachers of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+CREATE TRIGGER trg_tlteach_lock_del BEFORE DELETE ON timetable_lesson_teachers
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete timetable_lesson_teachers of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+
+CREATE TRIGGER trg_te_lock_ins BEFORE INSERT ON timetable_entries
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_entries of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = NEW.timetable_version_id);
+END;
+CREATE TRIGGER trg_te_lock_upd BEFORE UPDATE ON timetable_entries
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_entries of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+CREATE TRIGGER trg_te_lock_del BEFORE DELETE ON timetable_entries
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete timetable_entries of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+
+CREATE TRIGGER trg_tetp_lock_ins BEFORE INSERT ON timetable_entry_target_periods
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_entry_target_periods of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = NEW.timetable_version_id);
+END;CREATE TRIGGER trg_tetp_lock_upd BEFORE UPDATE ON timetable_entry_target_periods
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify timetable_entry_target_periods of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+CREATE TRIGGER trg_tetp_lock_del BEFORE DELETE ON timetable_entry_target_periods
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete timetable_entry_target_periods of a RELIEF-locked version')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.timetable_version_id = OLD.timetable_version_id);
+END;
+
+CREATE TRIGGER trg_ra_no_delete
+BEFORE DELETE ON relief_assignments
+BEGIN
+    SELECT RAISE(ABORT, 'relief_assignments records cannot be deleted; set status = CANCELLED instead');
+END;
+
+CREATE TRIGGER trg_ra_immutable_core_upd
+BEFORE UPDATE OF
+    id, relief_batch_id, academic_year_id, session_id, timetable_version_id,
+    teacher_absence_id, relief_date, absent_teacher_id,
+    timetable_lesson_id, timetable_entry_id, subject_id, day_of_week, start_minute, end_minute,
+    absent_teacher_short_name_snapshot, absent_teacher_name_snapshot,
+    subject_short_name_snapshot, subject_name_snapshot, target_classes_snapshot_json
+ON relief_assignments
+BEGIN
+    SELECT RAISE(ABORT, 'Core historical fields of relief_assignments are immutable');
+END;
+
+CREATE TRIGGER trg_rb_no_delete_with_assignments
+BEFORE DELETE ON relief_batches
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete relief_batch that already contains relief_assignments')
+    WHERE EXISTS (SELECT 1 FROM relief_assignments ra WHERE ra.relief_batch_id = OLD.id);
+END;
+
+-- 11. Audit Logs Append-Only
+CREATE TRIGGER trg_audit_logs_no_upd
+BEFORE UPDATE ON audit_logs
+BEGIN
+    SELECT RAISE(ABORT, 'audit_logs is append-only and cannot be updated');
+END;
+
+CREATE TRIGGER trg_audit_logs_no_del
+BEFORE DELETE ON audit_logs
+BEGIN
+    SELECT RAISE(ABORT, 'audit_logs is append-only and cannot be deleted');
+END;
+7F. Indeks Prestasi & Carian (22 Query Indexes)
+SQL
+CREATE INDEX idx_bell_periods_sched ON bell_periods (bell_schedule_id, start_minute, end_minute);
+CREATE INDEX idx_teacher_sessions_lookup ON teacher_sessions (academic_year_id, session_id, teacher_id);
+CREATE INDEX idx_teacher_subjects_lookup ON teacher_subjects (academic_year_id, subject_id, teacher_id);
+CREATE INDEX idx_classes_level ON classes (academic_year_id, session_id, education_level_id);
+CREATE INDEX idx_teacher_time_off_lookup ON teacher_time_off (academic_year_id, session_id, teacher_id, day_of_week);
+CREATE INDEX idx_subject_time_off_lookup ON subject_time_off (academic_year_id, session_id, subject_id, day_of_week);
+CREATE INDEX idx_class_time_off_lookup ON class_time_off (academic_year_id, session_id, class_id, day_of_week);
+CREATE INDEX idx_room_time_off_lookup ON room_time_off (academic_year_id, session_id, room_id, day_of_week);
+CREATE INDEX idx_ta_session_subject ON teaching_assignments (academic_year_id, session_id, subject_id);
+CREATE INDEX idx_tat_class ON teaching_assignment_targets (academic_year_id, session_id, class_id);
+CREATE INDEX idx_tateach_teacher ON teaching_assignment_teachers (academic_year_id, session_id, teacher_id);
+CREATE INDEX idx_tl_version ON timetable_lessons (timetable_version_id, subject_id);
+CREATE INDEX idx_tlt_class ON timetable_lesson_targets (timetable_version_id, class_id, timetable_lesson_id);
+CREATE INDEX idx_tlteach_teacher ON timetable_lesson_teachers (timetable_version_id, teacher_id, timetable_lesson_id);
+CREATE INDEX idx_te_slot ON timetable_entries (timetable_version_id, day_of_week, start_minute, end_minute);
+CREATE INDEX idx_tetp_class_period ON timetable_entry_target_periods (timetable_version_id, class_id, bell_period_id);
+CREATE INDEX idx_sra_cycle ON special_room_allocations (special_room_schedule_id, room_id, cycle_key, allocation_date);
+CREATE INDEX idx_sras_overlap ON special_room_allocation_slots (special_room_schedule_id, room_id, allocation_date, start_minute, end_minute);
+CREATE INDEX idx_teacher_absences_reason ON teacher_absences (absence_reason_id, absence_date);
+CREATE INDEX idx_relief_version ON relief_assignments (timetable_version_id, relief_date, status);
+CREATE INDEX idx_relief_teacher_date ON relief_assignments (relief_teacher_id, relief_date);
+CREATE INDEX idx_audit_logs_created ON audit_logs (created_at, entity_type);
+7G. Kod ERD Mermaid Lengkap (Kesemua 42 Jadual)
+Diagram
+erDiagram
+    school_profile {
+        INTEGER id PK
+        TEXT school_name
+        TEXT school_code
+        TEXT school_week_group
+    }
+
+    app_settings {
+        TEXT setting_key PK
+        TEXT setting_value
+        TEXT value_type
+    }
+
+    academic_years {
+        INTEGER id PK
+        TEXT year_code
+        TEXT start_date
+        TEXT end_date
+    }
+
+    school_sessions {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        TEXT session_code
+    }
+
+    operating_days {
+        INTEGER id PK
+        INTEGER session_id FK
+        INTEGER day_of_week
+        INTEGER is_operating
+    }
+
+    school_holidays {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        TEXT holiday_date
+    }
+
+    education_levels {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        TEXT level_code
+    }
+
+    bell_schedules {
+        INTEGER id PK
+        INTEGER session_id FK
+        TEXT name
+        INTEGER is_default
+    }
+
+    bell_periods {
+        INTEGER id PK
+        INTEGER bell_schedule_id FK
+        INTEGER period_number
+        TEXT period_type
+        INTEGER start_minute
+        INTEGER end_minute
+    }
+
+    bell_schedule_level_mappings {
+        INTEGER id PK
+        INTEGER session_id FK
+        INTEGER education_level_id FK
+        INTEGER bell_schedule_id FK
+    }
+
+    bell_schedule_day_overrides {
+        INTEGER id PK
+        INTEGER session_id FK
+        INTEGER education_level_id FK
+        INTEGER day_of_week
+        INTEGER bell_schedule_id FK
+    }
+
+    teachers {
+        INTEGER id PK
+        TEXT short_name
+        TEXT full_name
+        INTEGER is_active
+    }
+
+    teacher_sessions {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER teacher_id FK
+        INTEGER session_id FK
+    }
+
+    subjects {
+        INTEGER id PK
+        TEXT short_name
+        TEXT name
+    }
+
+    teacher_subjects {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER teacher_id FK
+        INTEGER subject_id FK
+    }
+
+    rooms {
+        INTEGER id PK
+        TEXT short_name
+        TEXT room_type
+        INTEGER max_concurrent_classes
+    }
+
+    classes {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER education_level_id FK
+        INTEGER home_room_id FK
+        TEXT short_name
+    }
+
+    student_groups {
+        INTEGER id PK
+        INTEGER class_id FK
+        TEXT group_code
+    }
+
+    teacher_time_off {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER teacher_id FK
+        INTEGER bell_period_id FK
+    }
+
+    subject_time_off {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER subject_id FK
+        INTEGER bell_period_id FK
+    }
+
+    class_time_off {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER class_id FK
+        INTEGER bell_period_id FK
+    }
+
+    room_time_off {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER room_id FK
+        INTEGER bell_period_id FK
+    }
+
+    teaching_assignments {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER subject_id FK
+        INTEGER room_id FK
+        TEXT assignment_type
+        INTEGER lessons_per_week
+        INTEGER periods_per_lesson
+    }
+
+    teaching_assignment_targets {
+        INTEGER id PK
+        INTEGER teaching_assignment_id FK
+        INTEGER class_id FK
+        INTEGER student_group_id FK
+    }
+
+    teaching_assignment_teachers {
+        INTEGER id PK
+        INTEGER teaching_assignment_id FK
+        INTEGER teacher_id FK
+        INTEGER subject_id FK
+    }
+
+    teaching_assignment_locked_slots {
+        INTEGER id PK
+        INTEGER teaching_assignment_id FK
+        INTEGER day_of_week
+        INTEGER start_minute
+        INTEGER end_minute
+    }
+
+    timetable_versions {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER version_number
+        TEXT version_name
+        TEXT effective_date
+    }
+
+    timetable_workspace_autosaves {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER base_timetable_version_id FK
+        TEXT payload_json
+    }
+
+    timetable_lessons {
+        INTEGER id PK
+        INTEGER timetable_version_id FK
+        INTEGER teaching_assignment_id FK
+        INTEGER subject_id FK
+        INTEGER room_id FK
+        INTEGER periods_per_lesson
+    }
+
+    timetable_lesson_targets {
+        INTEGER id PK
+        INTEGER timetable_version_id FK
+        INTEGER timetable_lesson_id FK
+        INTEGER class_id FK
+        INTEGER student_group_id FK
+    }
+
+    timetable_lesson_teachers {
+        INTEGER id PK
+        INTEGER timetable_version_id FK
+        INTEGER timetable_lesson_id FK
+        INTEGER teacher_id FK
+    }
+
+    timetable_entries {
+        INTEGER id PK
+        INTEGER timetable_version_id FK
+        INTEGER timetable_lesson_id FK
+        INTEGER day_of_week
+        INTEGER start_minute
+        INTEGER end_minute
+    }
+
+    timetable_entry_target_periods {
+        INTEGER id PK
+        INTEGER timetable_version_id FK
+        INTEGER timetable_entry_id FK
+        INTEGER timetable_lesson_target_id FK
+        INTEGER class_id FK
+        INTEGER bell_period_id FK
+        INTEGER period_sequence
+    }
+
+    special_room_schedules {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER timetable_version_id FK
+        TEXT start_date
+        TEXT end_date
+    }
+
+    special_room_allocations {
+        INTEGER id PK
+        INTEGER special_room_schedule_id FK
+        INTEGER timetable_version_id FK
+        INTEGER timetable_lesson_id FK
+        INTEGER timetable_entry_id FK
+        INTEGER room_id FK
+        TEXT allocation_date
+        INTEGER periods_used
+    }
+
+    special_room_allocation_slots {
+        INTEGER id PK
+        INTEGER special_room_allocation_id FK
+        INTEGER timetable_entry_id FK
+        INTEGER room_id FK
+        INTEGER slot_sequence
+        INTEGER start_minute
+        INTEGER end_minute
+    }
+
+    absence_reasons {
+        INTEGER id PK
+        TEXT name
+        INTEGER is_active
+    }
+
+    teacher_absences {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER teacher_id FK
+        INTEGER absence_reason_id FK
+        TEXT absence_date
+    }
+
+    relief_batches {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        INTEGER timetable_version_id FK
+        TEXT relief_date
+    }
+
+    relief_assignments {
+        INTEGER id PK
+        INTEGER relief_batch_id FK
+        INTEGER timetable_version_id FK
+        INTEGER teacher_absence_id FK
+        INTEGER absent_teacher_id FK
+        INTEGER relief_teacher_id FK
+        INTEGER timetable_entry_id FK
+        INTEGER subject_id FK
+        TEXT status
+    }
+
+    import_batches {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        TEXT entity_scope
+        TEXT import_mode
+    }
+
+    audit_logs {
+        INTEGER id PK
+        INTEGER academic_year_id FK
+        INTEGER session_id FK
+        TEXT entity_type
+        TEXT action
+    }
+
+    academic_years ||--o{ school_sessions : "contains"
+    academic_years ||--o{ school_holidays : "year holidays"
+    academic_years ||--o{ teacher_subjects : "qualifies"
+    academic_years ||--o{ import_batches : "logs"
+    academic_years ||--o{ audit_logs : "audits"
+
+    school_sessions ||--o{ operating_days : "authoritative days"
+    school_sessions ||--o{ school_holidays : "session holidays"
+    school_sessions ||--o{ education_levels : "defines"
+    school_sessions ||--o{ bell_schedules : "owns"
+    school_sessions ||--o{ bell_schedule_day_overrides : "overrides"
+    school_sessions ||--o{ teacher_sessions : "maps 1 session"
+    school_sessions ||--o{ classes : "owns"
+    school_sessions ||--o{ teacher_time_off : "scopes"
+    school_sessions ||--o{ subject_time_off : "scopes"
+    school_sessions ||--o{ class_time_off : "scopes"
+    school_sessions ||--o{ room_time_off : "scopes"
+    school_sessions ||--o{ teaching_assignments : "owns"
+    school_sessions ||--o{ timetable_versions : "owns"
+    school_sessions ||--o| timetable_workspace_autosaves : "1 active draft"
+    school_sessions ||--o{ import_batches : "session imports"
+    school_sessions ||--o{ audit_logs : "session audits"
+
+    education_levels ||--o{ bell_schedule_level_mappings : "maps bell"
+    education_levels ||--o{ bell_schedule_day_overrides : "level override"
+    education_levels ||--o{ classes : "groups"
+
+    bell_schedules ||--o{ bell_periods : "periods"
+    bell_schedules ||--o{ bell_schedule_level_mappings : "used by level"
+    bell_schedules ||--o{ bell_schedule_day_overrides : "used by day"
+
+    bell_periods ||--o{ teacher_time_off : "optional ref"
+    bell_periods ||--o{ subject_time_off : "optional ref"
+    bell_periods ||--o{ class_time_off : "optional ref"
+    bell_periods ||--o{ room_time_off : "optional ref"
+    bell_periods ||--o{ timetable_entry_target_periods : "target slot"
+
+    teachers ||--o{ teacher_sessions : "1 per year"
+    teachers ||--o{ teacher_subjects : "qualified"
+    teachers ||--o{ timetable_lesson_teachers : "lesson snapshot"
+    teachers ||--o{ relief_assignments : "relief cover"
+
+    teacher_sessions ||--o{ teacher_time_off : "composite FK"
+    teacher_sessions ||--o{ teaching_assignment_teachers : "composite FK"
+    teacher_sessions ||--o{ teacher_absences : "composite FK"
+
+    subjects ||--o{ teacher_subjects : "subject"
+    subjects ||--o{ subject_time_off : "time off"
+    subjects ||--o{ teaching_assignments : "subject"
+    subjects ||--o{ timetable_lessons : "snapshot"
+    subjects ||--o{ relief_assignments : "snapshot"
+
+    teacher_subjects ||--o{ teaching_assignment_teachers : "hard constraint FK"
+
+    rooms ||--o{ classes : "home room"
+    rooms ||--o{ room_time_off : "special solver only"
+    rooms ||--o{ teaching_assignments : "special room"
+    rooms ||--o{ timetable_lessons : "snapshot room"
+    rooms ||--o{ special_room_allocations : "allocated"
+
+    classes ||--o{ student_groups : "owns groups"
+    classes ||--o{ class_time_off : "composite FK"
+    classes ||--o{ teaching_assignment_targets : "composite FK"
+    classes ||--o{ timetable_lesson_targets : "composite FK"
+
+    student_groups ||--o{ teaching_assignment_targets : "optional group"
+    student_groups ||--o{ timetable_lesson_targets : "optional group"
+
+    teaching_assignments ||--o{ teaching_assignment_targets : "targets"
+    teaching_assignments ||--o{ teaching_assignment_teachers : "teachers"
+    teaching_assignments ||--o{ teaching_assignment_locked_slots : "locked slots"
+    teaching_assignments ||--o{ timetable_lessons : "origin"
+
+    timetable_versions ||--o{ timetable_workspace_autosaves : "optional base"
+    timetable_versions ||--o{ timetable_lessons : "lessons"
+    timetable_versions ||--o{ special_room_schedules : "room plans"
+    timetable_versions ||--o{ relief_batches : "relief batches"
+    timetable_versions ||--o{ relief_assignments : "locks permanently"
+
+    timetable_lessons ||--o{ timetable_lesson_targets : "targets"
+    timetable_lessons ||--o{ timetable_lesson_teachers : "teachers"
+    timetable_lessons ||--o{ timetable_entries : "entries"
+    timetable_lessons ||--o{ special_room_allocations : "allocations"
+
+    timetable_lesson_targets ||--o{ timetable_entry_target_periods : "target periods"
+    timetable_entries ||--o{ timetable_entry_target_periods : "entry periods"
+    timetable_entries ||--o{ special_room_allocations : "entry allocation"
+    timetable_entries ||--o{ special_room_allocation_slots : "slot entry"
+    timetable_entries ||--o{ relief_assignments : "absent slot"
+
+    special_room_schedules ||--o{ special_room_allocations : "allocations"
+    special_room_allocations ||--o{ special_room_allocation_slots : "1..3 slots"
+
+    absence_reasons ||--o{ teacher_absences : "reason RESTRICT"
+    teacher_absences ||--o{ relief_assignments : "absence source"
+    relief_batches ||--o{ relief_assignments : "contains"
+8. SQLITE VALIDATION & KEPUTUSAN UJIAN v1.3.2
+Keseluruhan SQL v1.3.2 di atas telah dijalankan secara terus pada SQLite 3.40.1 (PRAGMA foreign_keys = ON;) berserta skrip ujian khusus:
+#	Ujian Disahkan	Keputusan
+1	Penciptaan kesemua jadual, indeks, dan trigger	LULUS — 42 jadual, 45 indeks tersuai (23 uq_* + 22 idx_*), 64 trigger
+2	PRAGMA foreign_key_check	LULUS — Mengembalikan []
+3	Single Special Room Allocation (periods_used = 1)	LULUS — Menerima tepat 1 slot (P4: 590–620), menolak cubaan menambah slot ke-2
+4	Double Special Room Allocation (periods_used = 2)	LULUS — Menerima 2 slot bersambung (P1: 480–510, P2: 510–540), menolak room_id berbeza atau slot ke-3
+5	Triple Special Room Allocation (periods_used = 3)	LULUS — Menerima 3 slot bersambung (P1: 480–510, P2: 510–540, P3: 540–570) dengan COUNT(*) = 3 = periods_used
+6	Kapasiti max_concurrent_classes per Pertindihan Slot	LULUS — Pada bilik max_concurrent_classes = 2, slot bertindih pada P2 (kelas ke-3 serentak) ditolak, manakala slot pada P3 (hanya 2 kelas serentak) diterima
+7	absence_reasons — Tambah, Ubah Nama, Nyahaktif & Sejarah	LULUS — Penyahaktifan (is_active = 0) dan penukaran nama mengekalkan rekod teacher_absences sedia ada tanpa ralat; rekod baharu menggunakan sebab is_active = 0 ditolak; DELETE ke atas sebab yang digunakan dalam teacher_absences ditolak (ON DELETE RESTRICT); DELETE ke atas sebab tidak digunakan dibenarkan
+8	Pemadaman timetable_versions dengan timetable_workspace_autosaves	LULUS — base_timetable_version_id daripada sesi berbeza ditolak; apabila timetable_version asas dipadam, base_timetable_version_id bertukar kepada NULL, academic_year_id dan session_id kekal NOT NULL, dan payload_json kekal utuh untuk pemulihan AUTOSAVE
+9	Excel Import Scope (import_batches.entity_scope)	LULUS — Kelima-lima kategori (TEACHERS, SUBJECTS, CLASSES, ROOMS, TEACHING_ASSIGNMENTS) diterima; 'TEACHER_SUBJECTS' ditolak
+9. FINAL STATUS
+Status: READY FOR MIGRATION
+Pengesahan Jujur & Ketelusan Skop:
+Semua 42 jadual, 45 indeks tersuai, dan 64 trigger berjaya dilaksanakan pada SQLite 3.40.1 tanpa ralat dan menghasilkan PRAGMA foreign_key_check = [].
+Nota sempadan SQLite vs Lapisan Perkhidmatan: Kerana SQLite tidak menyokong deferred constraint triggers merentasi transaksi berbilang baris, SQLite menguatkuasakan had atas dan keunikan slot (slot_sequence <= periods_used, period_sequence <= periods_per_lesson, serta padanan period loceng sebenar), manakala jaminan kelengkapan penuh tepat 1/2/3 baris slot sebelum COMMIT kekal dikuatkuasakan oleh Lapisan Perkhidmatan dalam transaksi atomik. Ini ialah had semula jadi SQLite yang telah diambil kira secara rasmi dan bukan kecacatan skema.
+Tiada fail kod aplikasi atau migration Python/SQL dalam /tavio/ diubah pada peringkat spesifikasi ini. Skema v1.3.2 disahkan bersedia untuk pembangunan skrip migration SQLite (PRAGMA user_version).
