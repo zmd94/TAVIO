@@ -1,0 +1,285 @@
+TAVIO — Database Scheme & School Profile Specification v1.3.5
+
+Status: Spesifikasi diluluskan untuk pelaksanaan Phase 1 — Task 1 (School Profile)
+Baseline: Database Schema v1.3.2 + pembetulan Composite Foreign Key
+Migration v2: telah dilaksanakan dan disahkan pada database sebenar
+
+1. TUJUAN
+
+Dokumen ini menetapkan perubahan skema pangkalan data bagi menyokong pengurusan profil sekolah, logo sekolah, pentadbir sekolah dan konfigurasi penandatangan laporan jadual waktu.
+
+Semua perubahan mesti dilaksanakan melalui Migration v2 tanpa merosakkan atau kehilangan data sedia ada.
+
+2. BASELINE PANGKALAN DATA SEMASA
+
+Berdasarkan audit pangkalan data sebenar dan semakan kod sumber:
+
+- PRAGMA user_version: 1
+- Tables: 42
+- Indexes: 45
+- Triggers: 64
+- Foreign key violations: 0
+
+Baseline menggunakan skema v1.3.2 bersama pembetulan Composite Foreign Key untuk relief_assignments.
+
+Semua struktur dan data sedia ada mesti dikekalkan kecuali perubahan yang dinyatakan secara jelas dalam dokumen ini.
+
+3. PENAMBAHBAIKAN SCHOOL PROFILE
+
+3.1 Maklumat sekolah
+
+Profil sekolah perlu menyokong:
+- Nama sekolah
+- Kod sekolah
+- Alamat sekolah
+- Nombor telefon
+- Alamat e-mel
+- School Week Group (A atau B)
+- Logo sekolah
+
+Maklumat disimpan dalam jadual school_profile sedia ada.
+
+3.2 Logo sekolah
+
+Pengguna boleh:
+- Memuat naik logo.
+- Melihat pratonton.
+- Menggantikan logo.
+- Membuang logo.
+
+Format muat naik: PNG, JPG dan JPEG.
+
+Had dan pengesahan fail:
+- Saiz fail asal maksimum: 5 MB (5,242,880 bytes).
+- Dimensi minimum: 128 × 128 piksel.
+- Dimensi maksimum input: 3000 × 3000 piksel.
+- Sahkan kandungan imej sebenar boleh dibaca; jangan bergantung pada extension atau MIME type sahaja.
+- Tolak fail rosak, tidak boleh dibaca atau format yang tidak disokong.
+- Imej yang kurang daripada dimensi minimum mesti ditolak. Jangan besarkan (upscale) imej kecil secara automatik kerana ia tidak menambah ketajaman sebenar.
+- Jika mana-mana dimensi melebihi 3000 piksel, lakukan auto-resize secara berkadar sehingga kedua-dua dimensi berada dalam had maksimum.
+- Jangan crop imej secara automatik.
+- Kekalkan nisbah aspek asal dan elakkan regangan atau herotan.
+- Kekalkan transparency bagi imej sumber yang menyokongnya.
+
+Pemprosesan dan simpanan:
+- Semua imej yang diterima ditukar kepada PNG semasa disimpan.
+- Lakukan pengoptimuman/kompresi PNG secara lossless apabila sesuai; jangan gunakan tetapan lossy yang menjejaskan rupa logo.
+- Jangan paksa saiz fail output kepada had tertentu jika ia memerlukan kemerosotan kualiti visual yang tidak perlu.
+- Penukaran JPG/JPEG kepada PNG tidak semestinya mengecilkan saiz fail; keutamaan ialah kualiti visual dan format simpanan yang konsisten.
+- Jangan ubah atau padam logo sedia ada sehingga imej baharu berjaya disahkan, diproses dan disimpan sepenuhnya.
+- Simpan imej baharu ke fail sementara terlebih dahulu dan gantikan fail akhir hanya selepas proses berjaya.
+- Jika pengesahan, pemprosesan atau simpanan gagal, kekalkan logo lama dan paparkan mesej ralat yang jelas.
+
+Nama fail tetap:
+school_logo.png
+
+Lokasi:
+%LOCALAPPDATA%\TAVIO\assets\school_logo.png
+
+Pangkalan data menyimpan laluan relatif fail, bukan kandungan imej dalam bentuk BLOB.
+
+Peraturan paparan:
+- Kekalkan nisbah aspek asal.
+- Jangan meregangkan atau memesongkan logo.
+- Logo digunakan secara automatik dalam:
+  - Jadual waktu individu guru.
+  - Jadual waktu kelas.
+  - Jadual penggunaan bilik khas.
+
+Backup dan restore mesti merangkumi fail logo. Jika logo tiada semasa pemulihan, sistem perlu mengendalikan keadaan tersebut tanpa menyebabkan aplikasi gagal.
+
+Medan baharu pada school_profile:
+
+- logo_path TEXT — laluan relatif logo; NULL jika tiada logo.
+
+4. PENGURUSAN PENTADBIR SEKOLAH
+
+4.1 Jadual baharu: school_administrators
+
+Medan:
+- id INTEGER — primary key
+- position_title TEXT — jawatan pentadbir
+- administrator_name TEXT — nama pentadbir
+- sort_order INTEGER — susunan paparan
+- is_active INTEGER — status aktif
+- created_at TEXT — tarikh rekod dicipta
+- updated_at TEXT — tarikh rekod dikemas kini
+
+Keperluan:
+- Bilangan pentadbir tidak dihadkan.
+- Jawatan boleh ditetapkan secara bebas.
+- Tiada senarai jawatan yang dihardcode.
+- Pengguna boleh menambah, mengedit, menyusun, menyahaktifkan dan mengaktifkan semula rekod.
+- Nama dan jawatan wajib diisi.
+- Susunan paparan menggunakan sort_order.
+
+4.2 Keserasian dengan principal_name
+
+Medan principal_name sedia ada mesti dikekalkan.
+
+Semasa Migration v2:
+- Jika principal_name mempunyai nilai, cipta rekod pentadbir dengan jawatan Guru Besar.
+- Gunakan nilai asal sebagai administrator_name.
+- Jika kosong, jangan cipta rekod backfill.
+- Jangan memadam atau mengosongkan nilai asal.
+- Pastikan backfill tidak menghasilkan rekod pendua.
+
+5. KONFIGURASI PENANDATANGAN LAPORAN
+
+5.1 Jadual baharu: schedule_signatory_settings
+
+Jenis laporan:
+- TEACHER — jadual waktu individu guru
+- CLASS — jadual waktu kelas
+- SPECIAL_ROOM — jadual penggunaan bilik khas
+
+Medan:
+- schedule_type TEXT — primary key dan jenis laporan
+- prepared_by_administrator_id INTEGER — rujukan pentadbir penyedia
+- verified_by_administrator_id INTEGER — rujukan pentadbir pengesah
+- created_at TEXT — tarikh rekod dicipta
+- updated_at TEXT — tarikh rekod dikemas kini
+
+Kedua-dua medan ID pentadbir mempunyai foreign key kepada school_administrators(id) dengan tindakan ON DELETE RESTRICT.
+
+5.2 Rekod konfigurasi awal
+
+Migration v2 mesti menyediakan tepat tiga rekod konfigurasi:
+- TEACHER
+- CLASS
+- SPECIAL_ROOM
+
+Kedua-dua medan ID pentadbir bermula dengan nilai NULL.
+
+Pengguna perlu menetapkan seorang penyedia dan seorang pengesah bagi setiap jenis laporan sebelum laporan boleh dijana.
+
+5.3 Peraturan penandatangan
+
+1. Setiap jenis laporan mempunyai satu konfigurasi sahaja.
+2. Setiap laporan mempunyai tepat seorang penyedia dan seorang pengesah.
+3. Individu yang sama boleh menjadi penyedia dan pengesah.
+4. Individu berbeza juga dibenarkan.
+5. Konfigurasi setiap jenis laporan adalah berasingan.
+6. Pentadbir yang tidak aktif tidak boleh digunakan untuk laporan baharu.
+
+5.4 Pentadbir tidak aktif
+
+Jika pentadbir yang telah dipilih dinyahaktifkan:
+- Konfigurasi sedia ada tidak dipadam.
+- Sistem mengesan status tidak aktif.
+- Sistem meminta pengguna memilih pengganti sebelum laporan berkaitan dijana.
+- Pentadbir tidak aktif tidak boleh digunakan sebagai penandatangan laporan baharu.
+
+Rekod pentadbir yang masih dirujuk oleh konfigurasi tidak boleh dipadam kerana kekangan foreign key.
+
+6. TARIKH LAPORAN
+
+Tarikh ditetapkan secara manual ketika menjana atau mencetak laporan.
+
+Peraturan:
+- Format paparan DD/MM/YYYY.
+- Tidak semestinya mengikut tarikh semasa komputer.
+- Pengguna bebas memilih tarikh.
+- Tarikh bukan tetapan kekal profil sekolah.
+- Tidak perlu menambah jadual khas tarikh laporan tanpa kelulusan berasingan.
+
+7. SUSUN ATUR BAHAGIAN TANDATANGAN
+
+Bahagian bawah laporan menggunakan tiga ruang:
+
+Ruang kiri:
+- DISEDIAKAN OLEH
+- Nama penyedia
+- Jawatan penyedia
+- Ruang tandatangan
+
+Ruang tengah:
+- DISAHKAN OLEH
+- Nama pengesah
+- Jawatan pengesah
+- Ruang tandatangan
+
+Ruang kanan:
+- TARIKH
+- Tarikh pilihan
+
+Nama dan jawatan diperoleh daripada rekod pentadbir yang ditetapkan dalam konfigurasi penandatangan.
+
+Susun atur mesti konsisten untuk ketiga-tiga jenis laporan.
+
+8. MIGRATION v2
+
+Migration v2 menaikkan PRAGMA user_version daripada 1 kepada 2.
+
+Perubahan:
+1. Tambah medan logo_path pada school_profile.
+2. Cipta jadual school_administrators.
+3. Cipta jadual schedule_signatory_settings.
+4. Backfill principal_name kepada rekod pentadbir jika mempunyai nilai.
+5. Masukkan tiga rekod konfigurasi penandatangan dengan medan pentadbir NULL.
+6. Kekalkan semua data dan struktur sedia ada.
+
+Keperluan migrasi:
+- Dilaksanakan dalam transaksi.
+- Rollback keseluruhan migrasi jika berlaku kegagalan.
+- Tidak mengubah Migration v1.
+- Tidak menghasilkan rekod pendua.
+- Tidak mengubah jadual, indeks, trigger atau foreign key sedia ada secara tidak sengaja.
+- Backup dibuat sebelum migrasi pada pangkalan data sebenar.
+
+9. KEPERLUAN UJIAN
+
+Sekurang-kurangnya ujian berikut mesti dilaksanakan:
+- Migration v1 -> v2 berjaya.
+- Rollback apabila migrasi gagal.
+- Data sedia ada dikekalkan.
+- principal_name berjaya di-backfill.
+- Backfill tidak menghasilkan rekod pendua.
+- Tiga rekod konfigurasi diwujudkan tepat sekali.
+- Foreign key baharu berfungsi.
+- Pentadbir boleh ditambah, diedit, disusun dan dinyahaktifkan.
+- Pentadbir tidak aktif tidak boleh digunakan untuk laporan baharu.
+- Konfigurasi penyedia dan pengesah berfungsi bagi ketiga-tiga jenis laporan.
+- Logo PNG, JPG dan JPEG boleh dimuat naik dan disimpan sebagai PNG.
+- Logo boleh diganti dan dibuang.
+- Backup dan restore memulihkan logo dengan betul.
+- PRAGMA foreign_key_check tidak menghasilkan pelanggaran.
+- Semua ujian sedia ada masih lulus.
+
+10. KAWALAN PERUBAHAN SKEMA
+
+Sebarang perubahan yang tidak dinyatakan dalam dokumen ini memerlukan kelulusan terlebih dahulu.
+
+Dilarang:
+- Memadam atau mengubah struktur sedia ada tanpa kelulusan.
+- Menambah indeks tambahan secara automatik.
+- Mengubah Migration v1.
+- Memadam medan principal_name.
+- Menyimpan logo sebagai BLOB.
+- Menghardcode senarai jawatan pentadbir.
+- Menjana laporan tanpa penyedia dan pengesah yang sah.
+
+Akhir dokumen — TAVIO Database Scheme & School Profile Specification v1.3.5
+
+
+11. SPESIFIKASI PEMPROSESAN LOGO — v1.3.5
+
+Peraturan dalam seksyen 3.2 ialah ketetapan pelaksanaan untuk Phase 1 — Task 1 (School Profile). Pemprosesan logo berlaku pada lapisan aplikasi/fail dan tidak memerlukan perubahan tambahan pada skema database v2.
+
+Ujian tambahan wajib:
+- Tolak fail melebihi 5 MB.
+- Terima PNG, JPG dan JPEG yang sah.
+- Tolak fail rosak atau kandungan yang bukan imej walaupun extension kelihatan sah.
+- Tolak dimensi kurang daripada 128 × 128 piksel.
+- Kekalkan imej yang berada dalam had dimensi tanpa pembesaran.
+- Auto-resize imej yang melebihi 3000 piksel pada mana-mana sisi dengan nisbah aspek dikekalkan.
+- Sahkan tiada cropping, regangan atau herotan.
+- Sahkan transparency PNG dikekalkan.
+- Sahkan output disimpan sebagai PNG.
+- Sahkan kegagalan pemprosesan tidak merosakkan atau memadam logo sedia ada.
+- Sahkan penggantian logo hanya berlaku selepas output baharu berjaya disimpan.
+
+Kawalan skema:
+- Pelaksanaan School Profile Task 1 tidak boleh mencipta migration baharu atau mengubah Migration v1/v2.
+- Gunakan medan school_profile.logo_path yang telah tersedia dalam database v2.
+- Jangan tambah jadual, indeks atau trigger.
