@@ -24,6 +24,7 @@ from tavio.database.migrations import (
     split_sql_statements,
     validate_migrations,
 )
+from tavio.database.school_profile_repository import SchoolProfileRepository
 
 __all__ = [
     "ConnectionConfig",
@@ -35,6 +36,7 @@ __all__ = [
     "DatabaseTransactionError",
     "Migration",
     "MigrationResult",
+    "SchoolProfileRepository",
     "UnsupportedDatabaseVersionError",
     "apply_migrations",
     "create_connection",

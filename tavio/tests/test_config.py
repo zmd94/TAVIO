@@ -12,6 +12,8 @@ from tavio.config import (
     APP_NAME,
     DB_FILENAME,
     ENV_DATA_DIR_OVERRIDE,
+    SCHOOL_LOGO_FILENAME,
+    SCHOOL_LOGO_RELATIVE_PATH,
     ConfigurationError,
     build_app_paths,
     ensure_app_directories,
@@ -19,6 +21,7 @@ from tavio.config import (
     get_resource_path,
     get_resource_root,
     resolve_base_data_dir,
+    resolve_relative_asset_path,
 )
 from tavio.logging_setup import configure_logging
 
@@ -60,6 +63,10 @@ def test_build_and_ensure_app_directories(isolated_tavio_dir: Path) -> None:
     assert paths.data_dir == isolated_tavio_dir.resolve() / "data"
     assert paths.db_path == isolated_tavio_dir.resolve() / "data" / DB_FILENAME
     assert paths.db_path.name == "tavio.db"
+    assert paths.assets_dir == isolated_tavio_dir.resolve() / "assets"
+    assert paths.school_logo_path == paths.assets_dir / SCHOOL_LOGO_FILENAME
+    assert SCHOOL_LOGO_RELATIVE_PATH == "assets/school_logo.png"
+    assert paths.assets_dir.is_dir()
     assert paths.backups_dir.is_dir()
     assert paths.logs_dir.is_dir()
     assert paths.data_dir.is_dir()
@@ -128,3 +135,29 @@ def test_configure_logging_writes_log_file(isolated_tavio_dir: Path) -> None:
     for handler in list(logging.getLogger().handlers):
         logging.getLogger().removeHandler(handler)
         handler.close()
+
+
+def test_resolve_relative_asset_path_accepts_assets_subpath(isolated_tavio_dir: Path) -> None:
+    paths = ensure_app_directories(build_app_paths())
+    resolved = resolve_relative_asset_path(paths, SCHOOL_LOGO_RELATIVE_PATH)
+    assert resolved == paths.school_logo_path.resolve()
+
+
+@pytest.mark.parametrize(
+    "bad_path",
+    [
+        "",
+        "   ",
+        "/etc/passwd",
+        r"C:\TAVIO\assets\school_logo.png",
+        "../outside.png",
+        "assets/../../escape.png",
+    ],
+)
+def test_resolve_relative_asset_path_rejects_invalid_or_escaping_paths(
+    isolated_tavio_dir: Path,
+    bad_path: str,
+) -> None:
+    paths = ensure_app_directories(build_app_paths())
+    with pytest.raises(ConfigurationError):
+        resolve_relative_asset_path(paths, bad_path)

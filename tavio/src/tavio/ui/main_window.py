@@ -26,12 +26,15 @@ from PySide6.QtWidgets import (
 from tavio import __version__
 from tavio.config import APP_FULL_NAME, APP_NAME, AppPaths, get_asset_path
 from tavio.database import DatabaseManager
+from tavio.database.school_profile_repository import SchoolProfileRepository
+from tavio.services.school_logo_service import SchoolLogoService
+from tavio.services.school_profile_service import SchoolProfileService
 from tavio.services.startup_service import StartupDiagnosticReport, StartupService
+from tavio.ui.school_profile_page import SchoolProfilePage
 
 logger = logging.getLogger(__name__)
 
 FUTURE_NAVIGATION_MODULES: tuple[tuple[str, str], ...] = (
-    ("School & Sessions (Phase 1)", "School profile, operating days, sessions, and bell schedules."),
     ("Master Data (Phase 2)", "Teachers, classes, education levels, subjects, rooms, and assignments."),
     ("Timetable Engine (Phase 3)", "OR-Tools CP-SAT cross-session timetable generation."),
     ("Manual Editor (Phase 4)", "Interactive Class/Teacher/Room timetable editor and version activation."),
@@ -56,6 +59,11 @@ class MainWindow(QMainWindow):
         self._report = report
         self._startup_service = startup_service
         self._database_manager = database_manager
+        self._school_profile_service = SchoolProfileService(
+            repository=SchoolProfileRepository(database_manager),
+            logo_service=SchoolLogoService(),
+            paths=paths,
+        )
 
         self.setWindowTitle(f"{APP_NAME} — {APP_FULL_NAME}")
         self.setMinimumSize(1020, 660)
@@ -70,10 +78,14 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._solver_summary_label = QLabel()
         self._dep_table = QTableWidget(0, 4)
+        self._school_profile_page = SchoolProfilePage(
+            self._school_profile_service,
+            auto_load=False,
+        )
 
         self._build_ui()
         self._populate_diagnostics(report)
-        self.statusBar().showMessage(f"{APP_NAME} v{__version__} — Phase 0 Skeleton Ready")
+        self.statusBar().showMessage(f"{APP_NAME} v{__version__} — Phase 1 School Profile Ready")
 
     @property
     def database_manager(self) -> DatabaseManager:
@@ -127,16 +139,18 @@ class MainWindow(QMainWindow):
 
         self._nav_list.setObjectName("NavigationList")
         self._nav_list.addItem(QListWidgetItem("System Overview (Phase 0)"))
+        self._nav_list.addItem(QListWidgetItem("School Profile (Phase 1)"))
         for title, _desc in FUTURE_NAVIGATION_MODULES:
             self._nav_list.addItem(QListWidgetItem(title))
 
-        self._nav_list.currentRowChanged.connect(self._stack.setCurrentIndex)
+        self._nav_list.currentRowChanged.connect(self._on_navigation_changed)
 
         sidebar_layout.addLayout(brand_row)
         sidebar_layout.addWidget(self._nav_list, 1)
 
         # Main content stack
         self._stack.addWidget(self._build_overview_page())
+        self._stack.addWidget(self._school_profile_page)
         for title, description in FUTURE_NAVIGATION_MODULES:
             self._stack.addWidget(self._build_future_phase_page(title, description))
 
@@ -249,6 +263,11 @@ class MainWindow(QMainWindow):
                 self._dep_table.setItem(row_idx, col_idx, item)
 
         self._solver_summary_label.setText(report.solver_result.format_summary())
+
+    def _on_navigation_changed(self, row_index: int) -> None:
+        self._stack.setCurrentIndex(row_index)
+        if row_index == 1:
+            self._school_profile_page.reload()
 
     def _on_rerun_solver(self) -> None:
         try:

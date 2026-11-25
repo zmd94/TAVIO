@@ -102,3 +102,88 @@ QPushButton:hover {
 QPushButton:pressed {
     background-color: #1c3560;
 }
+
+QPushButton:disabled {
+    background-color: #b8c4d6;
+    color: #eef2f8;
+}
+
+QPushButton#SecondaryButton {
+    background-color: #eef2f8;
+    color: #16243b;
+    border: 1px solid #c5d1e2;
+}
+
+QPushButton#SecondaryButton:hover {
+    background-color: #e1e8f2;
+}
+
+QPushButton#DangerButton {
+    background-color: #ffffff;
+    color: #b42318;
+    border: 1px solid #f0b4ae;
+}
+
+QPushButton#DangerButton:hover {
+    background-color: #fef3f2;
+}
+
+QPushButton#DangerButton:disabled {
+    background-color: #f8f9fb;
+    color: #b8c4d6;
+    border: 1px solid #e2e8f0;
+}
+
+QLineEdit,
+QPlainTextEdit,
+QComboBox {
+    background-color: #ffffff;
+    color: #16243b;
+    border: 1px solid #c8d3e3;
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px;
+}
+
+QLineEdit:focus,
+QPlainTextEdit:focus,
+QComboBox:focus {
+    border: 1px solid #2f5597;
+}
+
+QScrollArea#ProfileScrollArea {
+    background-color: transparent;
+    border: none;
+}
+
+QLabel#HintLabel {
+    color: #5b6d82;
+    font-size: 12px;
+}
+
+QLabel#LogoPreview {
+    background-color: #f8fafc;
+    border: 1px dashed #b9c7da;
+    border-radius: 8px;
+    color: #64748b;
+    font-size: 12px;
+    padding: 8px;
+}
+
+QLabel#StatusBannerSuccess {
+    background-color: #ecfdf3;
+    color: #067647;
+    border: 1px solid #abefc6;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+}
+
+QLabel#StatusBannerError {
+    background-color: #fef3f2;
+    color: #b42318;
+    border: 1px solid #fecdca;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+}

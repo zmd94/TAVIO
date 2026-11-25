@@ -14,6 +14,8 @@ PACKAGE_NAME = "tavio"
 DB_FILENAME = "tavio.db"
 LOCK_FILENAME = "tavio.lock"
 LOG_FILENAME = "tavio.log"
+SCHOOL_LOGO_FILENAME = "school_logo.png"
+SCHOOL_LOGO_RELATIVE_PATH = f"assets/{SCHOOL_LOGO_FILENAME}"
 ENV_DATA_DIR_OVERRIDE = "TAVIO_DATA_DIR"
 
 
@@ -28,10 +30,16 @@ class AppPaths:
     base_dir: Path
     data_dir: Path
     db_path: Path
+    assets_dir: Path
     backups_dir: Path
     logs_dir: Path
     log_file_path: Path
     lock_file_path: Path
+
+    @property
+    def school_logo_path(self) -> Path:
+        """Return the canonical local filesystem path for the school logo PNG."""
+        return self.assets_dir / SCHOOL_LOGO_FILENAME
 
 
 def resolve_base_data_dir(
@@ -69,6 +77,7 @@ def build_app_paths(base_dir: Path | None = None) -> AppPaths:
     """Construct the complete set of TAVIO local application paths."""
     resolved_base = resolve_base_data_dir() if base_dir is None else base_dir.resolve()
     data_dir = resolved_base / "data"
+    assets_dir = resolved_base / "assets"
     backups_dir = resolved_base / "backups"
     logs_dir = resolved_base / "logs"
 
@@ -76,6 +85,7 @@ def build_app_paths(base_dir: Path | None = None) -> AppPaths:
         base_dir=resolved_base,
         data_dir=data_dir,
         db_path=data_dir / DB_FILENAME,
+        assets_dir=assets_dir,
         backups_dir=backups_dir,
         logs_dir=logs_dir,
         log_file_path=logs_dir / LOG_FILENAME,
@@ -88,6 +98,7 @@ def ensure_app_directories(paths: AppPaths) -> AppPaths:
     directories = (
         paths.base_dir,
         paths.data_dir,
+        paths.assets_dir,
         paths.backups_dir,
         paths.logs_dir,
     )
@@ -99,6 +110,25 @@ def ensure_app_directories(paths: AppPaths) -> AppPaths:
                 f"Failed to create TAVIO directory '{directory}': {exc}"
             ) from exc
     return paths
+
+
+def resolve_relative_asset_path(paths: AppPaths, relative_path: str) -> Path:
+    """Resolve a stored relative asset path safely inside ``paths.base_dir``."""
+    normalized = relative_path.strip().replace("\\", "/")
+    if not normalized:
+        raise ConfigurationError("Asset relative path cannot be empty.")
+    if Path(normalized).is_absolute() or (len(normalized) >= 2 and normalized[1] == ":"):
+        raise ConfigurationError(f"Asset path '{relative_path}' must be relative.")
+
+    candidate = (paths.base_dir / normalized).resolve()
+    base_resolved = paths.base_dir.resolve()
+    try:
+        candidate.relative_to(base_resolved)
+    except ValueError as exc:
+        raise ConfigurationError(
+            f"Asset path '{relative_path}' escapes TAVIO base directory."
+        ) from exc
+    return candidate
 
 
 def get_resource_root() -> Path:
