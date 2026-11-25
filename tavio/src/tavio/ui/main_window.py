@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from tavio import __version__
 from tavio.config import APP_FULL_NAME, APP_NAME, AppPaths, get_asset_path
+from tavio.database import DatabaseManager
 from tavio.services.startup_service import StartupDiagnosticReport, StartupService
 
 logger = logging.getLogger(__name__)
@@ -47,12 +48,14 @@ class MainWindow(QMainWindow):
         paths: AppPaths,
         report: StartupDiagnosticReport,
         startup_service: StartupService,
+        database_manager: DatabaseManager,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._paths = paths
         self._report = report
         self._startup_service = startup_service
+        self._database_manager = database_manager
 
         self.setWindowTitle(f"{APP_NAME} — {APP_FULL_NAME}")
         self.setMinimumSize(1020, 660)
@@ -71,6 +74,11 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._populate_diagnostics(report)
         self.statusBar().showMessage(f"{APP_NAME} v{__version__} — Phase 0 Skeleton Ready")
+
+    @property
+    def database_manager(self) -> DatabaseManager:
+        """Return the initialized DatabaseManager instance."""
+        return self._database_manager
 
     def _build_ui(self) -> None:
         root = QWidget()

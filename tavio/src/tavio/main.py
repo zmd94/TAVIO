@@ -20,6 +20,7 @@ from tavio.config import (
     get_asset_path,
     get_resource_path,
 )
+from tavio.database import DatabaseError, DatabaseManager
 from tavio.logging_setup import configure_logging
 from tavio.services.startup_service import StartupService
 from tavio.ui.main_window import MainWindow
@@ -112,6 +113,32 @@ def main() -> int:
     app.aboutToQuit.connect(lambda: release_single_instance_lock(lock_file))
 
     try:
+        try:
+            database_manager = DatabaseManager.from_app_paths(paths)
+            database_manager.initialize()
+        except DatabaseError as exc:
+            logger.critical("Database initialization failed: %s", exc, exc_info=True)
+            QMessageBox.critical(
+                None,
+                f"{APP_NAME} Database Initialization Error",
+                f"{APP_NAME} failed to initialize the local database:\n\n{exc}\n\n"
+                f"Check log file: {paths.log_file_path}",
+            )
+            return 1
+        except Exception as exc:  # noqa: BLE001 - fail loudly on unexpected DB startup error
+            logger.critical(
+                "Unexpected error during database initialization: %s",
+                exc,
+                exc_info=True,
+            )
+            QMessageBox.critical(
+                None,
+                f"{APP_NAME} Database Initialization Error",
+                f"{APP_NAME} failed to initialize the local database:\n\n{exc}\n\n"
+                f"Check log file: {paths.log_file_path}",
+            )
+            return 1
+
         startup_service = StartupService()
         try:
             report = startup_service.run_diagnostics()
@@ -126,7 +153,12 @@ def main() -> int:
             return 1
 
         _load_stylesheet(app)
-        window = MainWindow(paths=paths, report=report, startup_service=startup_service)
+        window = MainWindow(
+            paths=paths,
+            report=report,
+            startup_service=startup_service,
+            database_manager=database_manager,
+        )
         window.show()
         return app.exec()
     finally:
