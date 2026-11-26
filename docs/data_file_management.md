@@ -130,8 +130,27 @@ SAVE AS saves the current workspace as a new `.tavio` file at a location selecte
 3. Autosave writes the latest workspace state to the associated `.bak` recovery file, **not to the main `.tavio` file**.
 4. The main `.tavio` file therefore remains at the last successfully completed explicit SAVE or SAVE AS.
 5. The autosave recovery file represents the latest successfully written recovery state, not a permanent history of every autosave.
-6. If an autosave attempt fails, TAVIO must not replace a valid earlier recovery file with an incomplete or invalid one. The user should be notified unobtrusively when recovery protection cannot be updated.
+6. If an autosave attempt fails, TAVIO must not replace a valid earlier recovery file with an incomplete or invalid one. The failure must be recorded internally for safe handling, but it must not trigger an immediate notification.
 7. Autosave must use a temporary write-and-validate process before replacing the previous recovery file, so interruption during autosave does not destroy the last valid recovery state.
+
+### 9.1.1 Autosave notifications and failure warnings
+
+The user decided that autosave must operate without routine user-facing notifications:
+
+- Do not show a notification when autosave succeeds.
+- Do not show an immediate notification when autosave fails.
+- Do not show a permanent autosave status in the main-window status bar.
+- Autosave continues silently in the background at the agreed 5-minute interval.
+- An autosave failure must still be recorded internally so TAVIO can handle the risk safely.
+
+**Show a user-facing warning about an autosave failure only in these circumstances:**
+
+1. When the user chooses **EXIT**.
+2. When the user chooses **NEW TIMETABLE**, provided the user has not first used **SAVE** or **SAVE AS**.
+
+The warning must explain that the recovery file could not be updated and that the latest changes may therefore not be protected against an unexpected shutdown. It must not imply that the workspace has been saved successfully.
+
+Do not show this autosave-failure warning during ordinary work or merely because an autosave attempt has failed. This rule does not remove the separate SAVE / DON'T SAVE / CANCEL confirmation behavior already agreed for EXIT and NEW TIMETABLE.
 
 ### 9.2 Recovery-file name and location
 
