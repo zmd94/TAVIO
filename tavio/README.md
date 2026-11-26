@@ -1,157 +1,155 @@
-# TAVIO — Technical Documentation (`tavio/`)
+# TAVIO — Technical Documentation (tavio/)
 
-**TAVIO** (*Timetable Administration & Validation Intelligent Organizer*) is an offline-first, **source-available** Windows desktop application for Malaysian schools. This folder (`tavio/`) contains the authoritative Python and PySide6 desktop codebase.
+TAVIO (Timetable Administration & Validation Intelligent Organizer) is an offline-first, source-available Windows desktop application for Malaysian schools. This folder contains the authoritative Python and PySide6 desktop codebase.
 
----
+This document describes the implementation status and Windows development/build workflow. It distinguishes implemented infrastructure from planned application features.
 
-## Phase 0 Scope & Current Status
+## Current Implementation Status
 
-TAVIO is currently in **Phase 0 (Project Skeleton & Windows Packaging Spike)**. Database schemas, school configuration, timetable generation, manual editing, absence tracking, relief allocation, and reporting modules are planned for **Phases 1–6** and are **not yet implemented**.
+**Overall: Active development. The project has progressed beyond the initial Phase 0 skeleton.**
 
-Phase 0 currently provides:
-- Modular `src/tavio/` package layout (`ui`, `services`, `solver`, `database`, `reports`, `excel`, `domain`)
-- Windows local storage resolution under `%LOCALAPPDATA%\TAVIO\`
-- Rotating UTF-8 application logging (`%LOCALAPPDATA%\TAVIO\logs\tavio.log`)
-- Long-lived single-instance protection via `QLockFile` (`tavio.lock`, `setStaleLockTime(0)`)
-- Minimal PySide6 main window with navigation placeholders for Phases 1–6
-- Explicit startup dependency checks (`PySide6`, `ortools`, `reportlab`, `openpyxl`)
-- Headless OR-Tools CP-SAT smoke test (`tavio.solver.smoke_test`)
-- PyInstaller `--onedir` Windows build specification (`packaging/tavio.spec`) and PowerShell script (`packaging/build_windows.ps1`)
+### Implemented foundation
 
----
+- Modular Python package structure under src/tavio/.
+- PySide6 main window, navigation, and implemented school-configuration pages: School Profile, School Administrators, and Schedule Signatories.
+- Windows application-data path and resource resolution.
+- Rotating UTF-8 application logging.
+- Single-instance protection using Qt QLockFile.
+- SQLite database manager, schema initialization, and versioned migration system.
+- Database migrations currently reach PRAGMA user_version = 3.
+- Migration v3 adds nullable classes.class_teacher_id, with a foreign key to teachers(id) and ON DELETE RESTRICT.
+- Startup dependency diagnostics for PySide6, OR-Tools, ReportLab, and OpenPyXL.
+- OR-Tools CP-SAT smoke test.
+- pytest and Ruff configuration.
+- PyInstaller --onedir specification and PowerShell build script.
+
+### In progress / not yet complete
+
+- Remaining school configuration workflows.
+- Master Data user workflows for Teachers, Classes, Subjects, and Special Rooms.
+- Teaching assignment and Class Teacher assignment workflows, including eligibility validation.
+- Integration of Master Data and assignments with timetable workflows.
+
+### Planned application workflows
+
+- Timetable generation and full constraint validation.
+- Manual timetable editing, slot locking, and timetable version management.
+- Teacher absence management and automated relief allocation.
+- PDF and Excel reporting, including the approved timetable report layouts.
+
+**Important:** Database schema objects, migrations, placeholder navigation pages, and smoke tests do not by themselves constitute completed user-facing features.
+
+## Roadmap
+
+| Phase | Scope | Status |
+| :--- | :--- | :--- |
+| **Phase 0** | Project skeleton, local paths, logging, single-instance guard, startup checks, CP-SAT smoke test, packaging foundation | **Substantially complete** |
+| **Phase 1** | SQLite persistence/migrations and school configuration | **In progress** |
+| **Phase 2** | Master Data, teaching assignments, Class Teacher assignments, and validation | **In progress — database groundwork exists; application workflows remain** |
+| **Phase 3** | OR-Tools CP-SAT timetable generation and diagnostics | **Not started as a complete workflow** |
+| **Phase 4** | Manual timetable editor, locking, and version management | **Not started** |
+| **Phase 5** | Absence management, relief allocation, and audit history | **Not started** |
+| **Phase 6** | PDF/Excel reports and release packaging | **Not started** |
+
+## Workspace Architecture Status
+
+The current implementation uses a local SQLite database managed by the application under its Windows application-data location.
+
+The approved product specification separately defines a portable single-file .tavio workspace per school, including NEW TIMETABLE, OPEN AS, SAVE, SAVE AS, five-minute background recovery autosave to a .bak file, and startup recovery choices.
+
+**That portable workspace-file workflow has not yet been implemented.** The existing SQLite database manager, repositories, migrations, and data lifecycle need a deliberate technical design to support the approved workspace model. Do not assume that the current local database already behaves as a portable .tavio file.
+
+See [../docs/data_file_management.md](../docs/data_file_management.md) for the approved product decisions. These are specifications, not evidence that the corresponding code exists.
 
 ## Prerequisites
 
 - **Operating System:** Windows 10 or Windows 11 (64-bit)
-- **Python:** Python **3.11** or **3.12** (64-bit)
+- **Python:** Python 3.11 or 3.12 (64-bit)
 - **Shell:** Windows PowerShell 5.1+ or PowerShell 7+
-
----
 
 ## Setup & Installation (Windows PowerShell)
 
-All commands below assume your working directory is the `tavio/` folder inside the repository:
+Run these commands from the repository's tavio/ folder:
 
-```powershell
-cd tavio
+    cd tavio
+    py -3.12 -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    pip install -e ".[dev]"
 
-# 1. Create and activate a virtual environment
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# 2. Upgrade pip and install TAVIO with development/build dependencies
-python -m pip install --upgrade pip
-pip install -e ".[dev]"
-```
-
-*(If you use Python 3.11 instead of 3.12, replace `py -3.12` with `py -3.11`.)*
-
----
+For Python 3.11, replace py -3.12 with py -3.11.
 
 ## Running the Application
 
-With the virtual environment activated inside `tavio/`:
+With the virtual environment activated inside tavio/:
 
-```powershell
-python -m tavio.main
-```
+    python -m tavio.main
 
-*(Alternatively, run the installed GUI script `tavio`.)*
-
----
+Alternatively, run the installed GUI script tavio.
 
 ## Running Tests & Linter
 
-### Run `pytest`
-```powershell
-python -m pytest
-```
+Run pytest:
 
-### Run `Ruff`
-```powershell
-python -m ruff check src tests
-```
+    python -m pytest
 
----
+Run Ruff:
 
-## Building the Windows Executable (PyInstaller `--onedir`)
+    python -m ruff check src tests
 
-Run the PowerShell build script inside `tavio/` (by default this runs `pytest` and `ruff check` before invoking PyInstaller):
+## Building the Windows Executable (PyInstaller --onedir)
 
-```powershell
-.\packaging\build_windows.ps1
-```
+Run the PowerShell build script inside tavio/ (by default, it runs pytest and Ruff before invoking PyInstaller):
 
-Or invoke PyInstaller directly using the spec file:
+    .\packaging\build_windows.ps1
 
-```powershell
-python -m PyInstaller --noconfirm --clean packaging\tavio.spec
-```
+Or invoke PyInstaller directly:
 
-The `--onedir` output is generated at `dist\TAVIO\`. Launch the packaged executable manually on Windows to verify GUI rendering, single-instance locking, bundled stylesheets, and CP-SAT execution:
+    python -m PyInstaller --noconfirm --clean packaging\tavio.spec
 
-```powershell
-.\dist\TAVIO\TAVIO.exe
-```
+The --onedir output is generated at dist\TAVIO\. Launch the packaged executable manually on Windows to verify GUI rendering, single-instance locking, bundled stylesheets, and CP-SAT execution:
 
-*(Note: Packaging and `.exe` runtime behavior must be verified directly on Windows 10/11.)*
+    .\dist\TAVIO\TAVIO.exe
 
----
+**Note:** Packaging and executable runtime behavior must be verified directly on Windows 10/11.
 
-## Local Data Storage (`%LOCALAPPDATA%\TAVIO\`)
+## Local Application Data
 
-At runtime, TAVIO resolves `%LOCALAPPDATA%\TAVIO\` (or `TAVIO_DATA_DIR` if explicitly overridden for testing) and initializes:
+At runtime, TAVIO resolves the Windows local application-data location for its application files (or TAVIO_DATA_DIR when explicitly overridden for testing). The current implementation initializes application directories for database storage, logs, and the single-instance lock.
 
-- **Database directory:** `%LOCALAPPDATA%\TAVIO\data\` (reserved for `tavio.db` starting in Phase 1)
-- **Backup directory:** `%LOCALAPPDATA%\TAVIO\backups\` (reserved for atomic backups in Phase 6)
-- **Log file:** `%LOCALAPPDATA%\TAVIO\logs\tavio.log` (UTF-8 rotating log, up to 5 backups of 2 MB)
-- **Single-instance lock:** `%LOCALAPPDATA%\TAVIO\tavio.lock`
+The exact local SQLite runtime location is determined by the current database configuration. This local database arrangement is not the approved portable .tavio workspace workflow; see Workspace Architecture Status above.
 
----
+## Project Structure
 
-## Folder Structure
+    tavio/
+    ├── pyproject.toml
+    ├── README.md
+    ├── packaging/
+    │   ├── build_windows.ps1
+    │   └── tavio.spec
+    ├── resources/
+    │   ├── fonts/
+    │   ├── icons/
+    │   └── styles/
+    │       └── main.qss
+    ├── src/
+    │   └── tavio/
+    │       ├── config.py
+    │       ├── logging_setup.py
+    │       ├── main.py
+    │       ├── database/
+    │       ├── domain/
+    │       ├── excel/
+    │       ├── reports/
+    │       ├── services/
+    │       ├── solver/
+    │       └── ui/
+    └── tests/
 
-```text
-tavio/
-├── .gitignore
-├── pyproject.toml                # Package metadata, dependencies, pytest & Ruff config
-├── README.md                     # Technical documentation (this file)
-├── packaging/
-│   ├── build_windows.ps1         # Automated Windows test, lint, and PyInstaller build script
-│   └── tavio.spec                # PyInstaller --onedir build specification
-├── resources/
-│   ├── fonts/                    # Reserved for bundled PDF fonts (Phase 6)
-│   ├── icons/                    # Reserved for tavio.ico application icon
-│   └── styles/
-│       └── main.qss              # Phase 0 desktop Qt stylesheet
-├── src/
-│   └── tavio/
-│       ├── __init__.py
-│       ├── config.py             # %LOCALAPPDATA%\TAVIO path & resource resolution
-│       ├── logging_setup.py      # Rotating UTF-8 file + console logger
-│       ├── main.py               # Entry point, QLockFile guard, startup checks, GUI launch
-│       ├── database/             # Reserved for SQLite persistence (Phase 1+)
-│       ├── domain/               # Reserved for domain models & rules (Phase 1+)
-│       ├── excel/                # Reserved for OpenPyXL import/export (Phase 2+)
-│       ├── reports/              # Reserved for ReportLab PDF generation (Phase 6)
-│       ├── services/
-│       │   └── startup_service.py # Dependency verification & CP-SAT smoke runner
-│       ├── solver/
-│       │   └── smoke_test.py     # Headless OR-Tools CP-SAT Phase 0 smoke problem
-│       └── ui/
-│           └── main_window.py    # Minimal PySide6 shell window & Phase 0 diagnostics
-└── tests/
-    ├── conftest.py
-    ├── test_config.py            # Path, resource, ConfigurationError, and logging tests
-    ├── test_dependencies.py      # Import verification and diagnostics tests
-    ├── test_single_instance.py   # Long-lived QLockFile behavior tests
-    └── test_solver_smoke.py      # OR-Tools CP-SAT smoke test
-```
-
----
+Directory names may evolve as implementation progresses. The presence of a package or directory does not imply that all planned features are complete.
 
 ## License
 
-TAVIO is **Source-Available Software** licensed under the **PolyForm Noncommercial License 1.0.0** (`SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0`). See [`../LICENSE`](../LICENSE) for the full license text and `Required Notice`, and [`../README.md`](../README.md) for the project usage policy.
+TAVIO is **Source-Available Software** licensed under the **PolyForm Noncommercial License 1.0.0** (SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0). See [../LICENSE](../LICENSE) for the full license text and Required Notice, and [../README.md](../README.md) for the project usage policy.
 
-This license covers only original TAVIO code and materials; third-party dependencies (`PySide6`, `ortools`, `reportlab`, `openpyxl`, `PyInstaller`, `pytest`, `Ruff`) remain governed by their respective licenses.
+This license covers only original TAVIO code and materials; third-party dependencies (PySide6, ortools, reportlab, openpyxl, PyInstaller, pytest, and Ruff) remain governed by their respective licenses.
