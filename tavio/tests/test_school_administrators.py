@@ -370,13 +370,13 @@ def test_school_administrators_page_ui_crud_filter_reorder_status_and_delete(
 
         # Edit first row.
         page._start_edit(second_id)
-        assert page._cancel_edit_button.isVisible() is True
+        assert page._cancel_edit_button.isHidden() is False
         page._position_input.setText("PK Akademik")
         page._name_input.setText("Encik Razak Hassan")
         page._on_save_clicked()
         assert page._table.item(0, 1).text() == "PK Akademik"
         assert page._table.item(0, 2).text() == "Encik Razak Hassan"
-        assert page._cancel_edit_button.isVisible() is False
+        assert page._cancel_edit_button.isHidden() is True
 
         # Deactivate second_id -> hidden in Active Only, visible in Inactive Only.
         page._on_toggle_active(second_id, currently_active=True)
