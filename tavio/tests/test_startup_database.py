@@ -384,7 +384,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._database_manager is db_manager
         assert not paths.db_path.exists()
 
-        assert window._nav_list.count() == 2 + len(FUTURE_NAVIGATION_MODULES)
+        assert window._nav_list.count() == 3 + len(FUTURE_NAVIGATION_MODULES)
         assert window._dep_table.rowCount() == len(initial_report.dependencies)
         assert window._solver_summary_label.text() == initial_report.solver_result.format_summary()
 

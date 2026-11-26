@@ -1,6 +1,7 @@
 """PySide6 UI package for TAVIO."""
 
 from tavio.ui.main_window import MainWindow
+from tavio.ui.school_administrators_page import SchoolAdministratorsPage
 from tavio.ui.school_profile_page import SchoolProfilePage
 
-__all__ = ["MainWindow", "SchoolProfilePage"]
+__all__ = ["MainWindow", "SchoolAdministratorsPage", "SchoolProfilePage"]

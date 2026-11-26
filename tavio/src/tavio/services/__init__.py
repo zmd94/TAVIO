@@ -1,5 +1,9 @@
 """Application services package for TAVIO."""
 
+from tavio.services.school_administrator_service import (
+    SchoolAdministratorService,
+    SchoolAdministratorValidationError,
+)
 from tavio.services.school_logo_service import (
     MAX_LOGO_DIMENSION,
     MAX_LOGO_FILE_SIZE_BYTES,
@@ -27,6 +31,8 @@ __all__ = [
     "MAX_LOGO_FILE_SIZE_BYTES",
     "MIN_LOGO_DIMENSION",
     "ProcessedLogoInfo",
+    "SchoolAdministratorService",
+    "SchoolAdministratorValidationError",
     "SchoolLogoError",
     "SchoolLogoService",
     "SchoolProfileService",

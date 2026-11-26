@@ -25,11 +25,16 @@ from PySide6.QtWidgets import (
 
 from tavio import __version__
 from tavio.config import APP_FULL_NAME, APP_NAME, AppPaths, get_asset_path
-from tavio.database import DatabaseManager
-from tavio.database.school_profile_repository import SchoolProfileRepository
+from tavio.database import (
+    DatabaseManager,
+    SchoolAdministratorRepository,
+    SchoolProfileRepository,
+)
+from tavio.services.school_administrator_service import SchoolAdministratorService
 from tavio.services.school_logo_service import SchoolLogoService
 from tavio.services.school_profile_service import SchoolProfileService
 from tavio.services.startup_service import StartupDiagnosticReport, StartupService
+from tavio.ui.school_administrators_page import SchoolAdministratorsPage
 from tavio.ui.school_profile_page import SchoolProfilePage
 
 logger = logging.getLogger(__name__)
@@ -64,6 +69,9 @@ class MainWindow(QMainWindow):
             logo_service=SchoolLogoService(),
             paths=paths,
         )
+        self._school_administrator_service = SchoolAdministratorService(
+            repository=SchoolAdministratorRepository(database_manager),
+        )
 
         self.setWindowTitle(f"{APP_NAME} — {APP_FULL_NAME}")
         self.setMinimumSize(1020, 660)
@@ -82,10 +90,16 @@ class MainWindow(QMainWindow):
             self._school_profile_service,
             auto_load=False,
         )
+        self._school_administrators_page = SchoolAdministratorsPage(
+            self._school_administrator_service,
+            auto_load=False,
+        )
 
         self._build_ui()
         self._populate_diagnostics(report)
-        self.statusBar().showMessage(f"{APP_NAME} v{__version__} — Phase 1 School Profile Ready")
+        self.statusBar().showMessage(
+            f"{APP_NAME} v{__version__} — Phase 1 School Profile & Administrators Ready"
+        )
 
     @property
     def database_manager(self) -> DatabaseManager:
@@ -140,6 +154,7 @@ class MainWindow(QMainWindow):
         self._nav_list.setObjectName("NavigationList")
         self._nav_list.addItem(QListWidgetItem("System Overview (Phase 0)"))
         self._nav_list.addItem(QListWidgetItem("School Profile (Phase 1)"))
+        self._nav_list.addItem(QListWidgetItem("School Administrators (Phase 1)"))
         for title, _desc in FUTURE_NAVIGATION_MODULES:
             self._nav_list.addItem(QListWidgetItem(title))
 
@@ -151,6 +166,7 @@ class MainWindow(QMainWindow):
         # Main content stack
         self._stack.addWidget(self._build_overview_page())
         self._stack.addWidget(self._school_profile_page)
+        self._stack.addWidget(self._school_administrators_page)
         for title, description in FUTURE_NAVIGATION_MODULES:
             self._stack.addWidget(self._build_future_phase_page(title, description))
 
@@ -268,6 +284,8 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(row_index)
         if row_index == 1:
             self._school_profile_page.reload()
+        elif row_index == 2:
+            self._school_administrators_page.reload()
 
     def _on_rerun_solver(self) -> None:
         try:

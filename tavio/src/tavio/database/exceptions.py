@@ -21,3 +21,11 @@ class DatabaseMigrationError(DatabaseError):
 
 class UnsupportedDatabaseVersionError(DatabaseMigrationError):
     """Raised when an existing database schema version is unsupported or newer than known."""
+
+
+class AdministratorNotFoundError(DatabaseError):
+    """Raised when a targeted school administrator record does not exist."""
+
+
+class AdministratorInUseError(DatabaseError):
+    """Raised when deleting an administrator is blocked by ON DELETE RESTRICT foreign keys."""

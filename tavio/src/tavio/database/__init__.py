@@ -8,6 +8,8 @@ from tavio.database.connection import (
     get_connection_pragmas,
 )
 from tavio.database.exceptions import (
+    AdministratorInUseError,
+    AdministratorNotFoundError,
     DatabaseConnectionError,
     DatabaseError,
     DatabaseMigrationError,
@@ -24,9 +26,12 @@ from tavio.database.migrations import (
     split_sql_statements,
     validate_migrations,
 )
+from tavio.database.school_administrator_repository import SchoolAdministratorRepository
 from tavio.database.school_profile_repository import SchoolProfileRepository
 
 __all__ = [
+    "AdministratorInUseError",
+    "AdministratorNotFoundError",
     "ConnectionConfig",
     "DEFAULT_MIGRATIONS",
     "DatabaseConnectionError",
@@ -36,6 +41,7 @@ __all__ = [
     "DatabaseTransactionError",
     "Migration",
     "MigrationResult",
+    "SchoolAdministratorRepository",
     "SchoolProfileRepository",
     "UnsupportedDatabaseVersionError",
     "apply_migrations",
