@@ -2,141 +2,121 @@
 
 **Smart School Scheduling System** · **Windows Desktop** · **Source-Available Software**
 
-> **[TAVIO Logo Placeholder]**  
-> *Brand banner and application icon assets will be added to `tavio/resources/icons/` in a later release.*
+## Overview
 
----
+TAVIO is an offline-first, source-available Windows desktop application being developed for Malaysian schools. It aims to support school timetable administration, validation and optimization, including multiple school sessions, operating-day schedules, specialist-room constraints, teacher assignments, and teacher absence/relief workflows.
 
-## Overview & Problem Statement
-
-**TAVIO** (*Timetable Administration & Validation Intelligent Organizer*) is an offline-first, source-available Windows desktop application designed for Malaysian schools.
-
-Schools regularly face complex scheduling challenges: managing multiple school sessions, varying bell schedules across operating days, team-taught and split-group lessons, specialist room constraints, and daily teacher absences (*Guru Ganti* / relief coordination). Many schools rely on manual spreadsheets or disconnected tools that require constant internet access or recurring cloud subscriptions.
-
-TAVIO aims to solve these challenges locally on a school's Windows PC—operating **100% offline** with deterministic validation, constraint optimization, and printable administrative outputs.
-
----
+The authoritative application codebase is the Python/PySide6 project in [tavio/](tavio/README.md).
 
 ## Project Status
 
-**Current Status:** **Phase 0 — Project Skeleton & Windows Packaging Spike** (Active Development)
+**Overall: Active development — foundational infrastructure is in place; core school workflows are still being developed.**
 
-TAVIO is in early foundational development. Core scheduling, database persistence, and relief modules are scheduled for upcoming phases and are **not yet implemented**.
+TAVIO has progressed beyond the original Phase 0 skeleton. The SQLite database layer and versioned migrations are implemented, and several school-configuration screens are functional. The full Master Data workflows, timetable generation and editing, relief management, and final reporting workflows are not yet complete.
 
-### Implemented in Phase 0
-- Modular Python package structure inside `tavio/src/tavio/`
-- Windows `%LOCALAPPDATA%\TAVIO\` directory initialization (`data\`, `backups\`, `logs\`)
-- Rotating UTF-8 application logging (`%LOCALAPPDATA%\TAVIO\logs\tavio.log`)
-- Long-lived single-instance protection using `QLockFile` (`tavio.lock`)
-- Minimal PySide6 desktop shell window with Phase 1–6 navigation placeholders
-- Startup dependency verification (`PySide6`, `ortools`, `reportlab`, `openpyxl`) and an OR-Tools CP-SAT smoke test
-- PyInstaller `--onedir` Windows packaging specification (`tavio/packaging/tavio.spec`) and PowerShell build script
+### Implemented
 
-### Planned Features (Phases 1–6)
-- **School timetable generation** (OR-Tools CP-SAT optimization with cross-session conflict validation, team teaching, parallel student groups, and synchronized multi-class scheduling) — *Phase 3*
-- **Manual timetable management** (interactive Class, Teacher, and Room editor with real-time conflict checking, slot locking, and version management) — *Phase 4*
-- **Teacher absence management** (full-day, multi-day, session/period, and custom `HH:MM` partial-day absences with overlap protection) — *Phase 5*
-- **Automated teacher relief allocation** (CP-SAT daily and date-range relief batches, workload balancing, manual overrides, and append-only audit logs) — *Phase 5*
-- **PDF and Excel reporting** (ReportLab timetable PDFs, *Slip Guru Ganti*, and OpenPyXL import/export workbooks) — *Phases 2 & 6*
-- **Offline-first local operation** (local SQLite storage in `tavio.db` and atomic backup/restore) — *Phases 1 & 6*
+- Modular Python package structure for the Windows desktop application.
+- PySide6 application shell, navigation, startup diagnostics, and single-instance protection.
+- Local application configuration, resource resolution, and rotating UTF-8 logging.
+- SQLite database infrastructure, schema management, and versioned migrations through migration version 3.
+- Database migration for Class Teacher linkage: nullable classes.class_teacher_id references teachers(id) with ON DELETE RESTRICT.
+- Functional school-configuration pages: School Profile, School Administrators, and Schedule Signatories.
+- Startup dependency checks and an OR-Tools CP-SAT smoke test.
+- Automated test and lint configuration, plus a PyInstaller Windows packaging specification and build script.
 
----
+### Partially implemented / in progress
+
+- **Phase 1 — Application and school configuration foundation:** database infrastructure and initial configuration screens exist; the complete configuration workflow and approved portable workspace-file design are not yet implemented.
+- **Phase 2 — Master Data foundation:** database groundwork exists, but complete Teachers, Classes, Subjects, Special Rooms, teaching assignments, and Class Teacher management workflows are not yet available in the application.
+
+### Not yet implemented as complete application workflows
+
+- Timetable generation and full constraint validation.
+- Manual timetable editing, locking, and version-management workflows.
+- Teacher absence management and automated relief allocation.
+- Final PDF and Excel reporting workflows.
+
+> A database table or migration does not mean its corresponding user-facing feature is complete. This status describes usable application workflows, not merely the presence of schema objects.
 
 ## Development Roadmap
 
-| Phase | Scope | Status |
+| Phase | Scope | Current assessment |
 | :--- | :--- | :--- |
-| **Phase 0** | Project skeleton, `LocalAppData` setup, logging, `QLockFile`, dependency & CP-SAT smoke checks, PyInstaller `--onedir` config | **Current Phase** |
-| **Phase 1** | Local SQLite schema & migrations (`tavio.db`), school configuration, flexible operating days, multi-session bell schedules | Planned |
-| **Phase 2** | Master data (teachers, classes, education levels, subjects, rooms), teaching assignments, Excel import templates | Planned |
-| **Phase 3** | Cross-session OR-Tools CP-SAT timetable generation engine & pre-solve diagnostics | Planned |
-| **Phase 4** | Manual timetable editor, slot locking, timetable versioning & future-relief impact checks | Planned |
-| **Phase 5** | Granular teacher absences, automated batch relief allocation & append-only audit history | Planned |
-| **Phase 6** | ReportLab PDFs (*Slip Guru Ganti* & timetables), Excel analytics, SQLite backup/restore & Windows release packaging | Planned |
+| **Phase 0** | Project skeleton, Windows paths, logging, single-instance protection, dependency checks, CP-SAT smoke test, packaging foundation | **Substantially complete** |
+| **Phase 1** | SQLite persistence and migrations; school configuration; remaining configuration and workspace foundation | **In progress** |
+| **Phase 2** | Master Data, teaching assignments, Class Teacher assignments, and validation | **In progress — database groundwork exists; application workflows remain** |
+| **Phase 3** | Timetable generation, constraint validation, solver diagnostics, and optimization using OR-Tools CP-SAT | **Not started as a complete workflow** |
+| **Phase 4** | Manual timetable editor, slot locking, timetable versioning, and related validation | **Not started** |
+| **Phase 5** | Teacher absences, relief allocation, workload balancing, overrides, and audit history | **Not started** |
+| **Phase 6** | PDF/Excel reports, final packaging and release readiness | **Not started** |
 
----
+Phase labels are planning milestones. Work may overlap where database foundations are needed ahead of their user-facing phase.
+
+## Important Architecture Note: Database and Workspace Design
+
+The current application has a local SQLite database implementation managed under the Windows local application-data area.
+
+Separately, the approved product direction describes a portable single .tavio workspace file per school, with NEW TIMETABLE, OPEN AS, SAVE, SAVE AS, background recovery/autosave, and recovery handling.
+
+**The portable .tavio workspace-file workflow is a documented design, not an implemented feature.** The current SQLite database architecture and migrations must be technically reconciled with that workspace design before implementation. Existing database schema and migrations must not be discarded or replaced casually.
+
+See [docs/data_file_management.md](docs/data_file_management.md) for the approved workspace decisions.
 
 ## Technology Stack
 
 - **Language:** Python 3.11 or 3.12 (64-bit Windows)
 - **Desktop GUI:** PySide6 (Qt 6)
-- **Local Database:** SQLite (planned for Phase 1+, stored locally as `tavio.db`)
+- **Database:** SQLite with versioned migrations
 - **Optimization Engine:** Google OR-Tools (CP-SAT)
-- **PDF Reporting:** ReportLab
-- **Excel Operations:** OpenPyXL
+- **PDF Reporting:** ReportLab (planned workflow)
+- **Excel Operations:** OpenPyXL (planned workflow)
 - **Testing & Code Quality:** pytest, Ruff
-- **Windows Packaging:** PyInstaller (`--onedir`)
-
----
+- **Windows Packaging:** PyInstaller (--onedir); Inno Setup is part of the planned installer workflow
 
 ## Repository Structure
 
-```text
-.
-├── LICENSE                  # PolyForm Noncommercial License 1.0.0 + Required Notice
-├── README.md                # Main project overview and usage policy
-├── tavio/                   # Authoritative Python/PySide6 Windows desktop codebase
-│   ├── pyproject.toml       # Python metadata, dependencies, pytest & Ruff config
-│   ├── README.md            # Technical setup, test, and Windows build documentation
-│   ├── packaging/           # PyInstaller .spec and PowerShell build script
-│   ├── resources/           # Stylesheets, icons, and fonts
-│   ├── src/tavio/           # Modular desktop application source code
-│   └── tests/               # Automated pytest suite
-├── package.json             # Existing root React/Vite scaffold (not part of desktop app)
-├── index.html               # Existing root web entry scaffold
-├── src/                     # Existing root React/Vite scaffold sources
-├── vite.config.ts           # Existing Vite configuration
-├── tsconfig.json            # Existing TypeScript configuration
-├── metadata.json            # Existing root template metadata
-├── .env.example             # Existing root environment template
-└── .gitignore
-```
-
-> **Codebase Note:** The Python and PySide6 project inside [`tavio/`](tavio/README.md) is the authoritative codebase for the TAVIO Windows desktop application. The React/Vite scaffold files at the repository root (`package.json`, `index.html`, `src/`, `vite.config.ts`, `tsconfig.json`, `metadata.json`, `.env.example`) are inherited workspace template/prototype files and are **not** part of or a dependency of the official TAVIO desktop application; they are retained untouched as their future disposition in the repository has not yet been finalized.
-
----
+- LICENSE
+- README.md — Main project overview, status and roadmap
+- docs/ — Approved product and reporting specifications
+- tavio/ — Authoritative Python/PySide6 desktop application
+  - pyproject.toml
+  - README.md — Technical setup, implementation status and build guide
+  - packaging/
+  - resources/
+  - src/tavio/
+  - tests/
+- Root React/Vite scaffold files (package.json, index.html, src/, vite.config.ts, tsconfig.json, metadata.json, .env.example) are inherited workspace template/prototype files. They are not part of, or dependencies of, the official TAVIO desktop application; their future disposition has not yet been finalized.
 
 ## System Requirements
 
 - **Operating System:** Windows 10 or Windows 11 (64-bit)
-- **Network:** Fully offline during normal operation (no mandatory internet connection, no cloud database)
-- **Development / Build Environment:**
-  - Python 3.11 or 3.12 (64-bit)
-  - Windows PowerShell 5.1+ or PowerShell 7+
-
----
+- **Normal operation:** Designed for offline local use
+- **Development/build environment:** Python 3.11 or 3.12 (64-bit), Windows PowerShell 5.1+ or PowerShell 7+
 
 ## Installation & Development Documentation
 
-For step-by-step instructions on setting up the Python virtual environment, installing dependencies, running the application, running `pytest` and `Ruff`, and building the Windows executable, see:
+For setup, dependency installation, running the application, tests, Ruff, and Windows build instructions, see:
 
-- **[TAVIO Technical Documentation (`tavio/README.md`)](tavio/README.md)**
-- **[Python Package Configuration (`tavio/pyproject.toml`)](tavio/pyproject.toml)**
-
----
+- [TAVIO Technical Documentation (tavio/README.md)](tavio/README.md)
+- [Python Package Configuration (tavio/pyproject.toml)](tavio/pyproject.toml)
 
 ## License & Usage Policy
 
-TAVIO is distributed as **Source-Available Software** under the **[PolyForm Noncommercial License 1.0.0](LICENSE)** (`SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0`).
+TAVIO is distributed as **Source-Available Software** under the **[PolyForm Noncommercial License 1.0.0](LICENSE)** (SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0).
 
-> **Note:** TAVIO is **not** OSI-approved Open Source Software because the license restricts commercial use.
+> TAVIO is **not** OSI-approved Open Source Software because the license restricts commercial use.
 
-Full license terms are available in **[LICENSE](LICENSE)** and at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
+Full terms are available in [LICENSE](LICENSE) and at https://polyformproject.org/licenses/noncommercial/1.0.0.
 
 ### Permitted Uses
-Educational institutions are permitted to use TAVIO under the PolyForm Noncommercial License 1.0.0, regardless of their funding sources, subject to the license terms.
 
-Under the PolyForm Noncommercial License 1.0.0, permitted uses include:
-- **Educational institutions**, including government/public and private schools, regardless of funding source (`Noncommercial Organizations` section).
-- **Noncommercial purposes** (`Noncommercial Purposes` section).
-- **Personal study, learning, research, experimentation, and testing** without anticipated commercial application (`Personal Uses` section).
-- **Modification and distribution of copies** for purposes permitted by the license, provided all distributed copies include the license terms (or official URL) and the `Required Notice:` line from `LICENSE`.
+Educational institutions are permitted to use TAVIO under the PolyForm Noncommercial License 1.0.0, regardless of funding sources, subject to the license terms. Permitted uses include educational institutions, noncommercial purposes, personal study/research/testing without anticipated commercial application, and modification/distribution for license-permitted purposes with the required license terms and Required Notice.
 
 ### Commercial Use
-- Commercial use is **not** automatically granted by this license.
-- Any individual or organization wishing to use, sell, host, or distribute TAVIO for commercial purposes must obtain a separate commercial license or explicit written permission from the TAVIO owner.
-- The TAVIO owner reserves the right to offer separate commercial licensing terms.
-- Permission granted to educational institutions under the license applies to use by those institutions and does **not** grant third-party vendors or commercial service providers general permission to sell or commercially exploit TAVIO.
+
+Commercial use is not automatically granted. Any individual or organization wishing to use, sell, host, or distribute TAVIO for commercial purposes must obtain a separate commercial license or explicit written permission from the TAVIO owner.
 
 ### Third-Party Dependencies
-The PolyForm Noncommercial License 1.0.0 applies solely to the original code and materials owned or licensed by the TAVIO contributors. It does **not** replace, override, or modify the respective licenses of third-party dependencies used by TAVIO (including PySide6, Google OR-Tools, ReportLab, OpenPyXL, PyInstaller, pytest, and Ruff).
+
+The PolyForm Noncommercial License 1.0.0 applies solely to original TAVIO code and materials. It does not replace or modify the respective licenses of third-party dependencies, including PySide6, Google OR-Tools, ReportLab, OpenPyXL, PyInstaller, pytest, and Ruff.
