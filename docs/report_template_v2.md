@@ -1,5 +1,5 @@
 # TAVIO — Spesifikasi Templat Laporan Jadual Waktu
-Versi dokumen: 2.0
+Versi dokumen: 2.1
 Status: Draf spesifikasi berdasarkan keputusan reka bentuk yang dipersetujui
 Skop: Reka bentuk, susunan rekod, preview dan penjanaan lima jenis laporan jadual waktu
 
@@ -17,7 +17,9 @@ Dokumen ini merekodkan spesifikasi dan keputusan reka bentuk sahaja. Ia bukan ar
 
 1. Semua laporan menggunakan data daripada versi jadual waktu yang sama yang dipilih secara jelas oleh pengguna.
 2. Laporan tidak boleh mengambil data daripada autosave atau draf workspace.
-3. Preview dan PDF akhir mesti menggunakan enjin serta susun atur PDF yang sama. Preview ialah paparan PDF sebenar yang akan dijana, bukan lakaran atau anggaran.
+3. Preview ialah fail PDF sementara yang sebenar. Apabila pengguna menekan **JANA PDF**, sistem menggunakan fail PDF preview yang sama tepat sebagai fail akhir; sistem tidak menjana semula PDF daripada database.
+4. Preview hanya sah untuk gabungan pilihan dan data yang digunakan semasa preview dijana. Jika pengguna mengubah tahun akademik, sesi, versi jadual waktu, jenis laporan, variasi templat, pilihan rekod atau tarikh tandatangan, preview lama menjadi tidak sah dan preview baharu mesti dijana.
+5. Jika fail preview sementara hilang, rosak atau tidak boleh digunakan, pengguna mesti menjana preview semula sebelum PDF akhir boleh dihasilkan.
 4. Proses preview dan penjanaan PDF tidak boleh mengubah data jadual waktu atau rekod database.
 5. Pilihan Dengan Tandatangan atau Tanpa Tandatangan hanya memilih variasi templat; ia tidak mengubah konfigurasi Schedule Signatories.
 6. Label tandatangan dan bahasa tarikh tandatangan mengikut bahasa yang dipilih dalam tetapan Schedule Signatories.
@@ -26,7 +28,7 @@ Dokumen ini merekodkan spesifikasi dan keputusan reka bentuk sahaja. Ia bukan ar
 9. Dalam kotak/sel jadual, gunakan nama ringkasan bagi nama guru, subjek, kelas dan bilik.
 10. Nama penuh digunakan pada tajuk utama atau bahagian pengenalan yang ditetapkan secara khusus.
 11. Jangan tambah jadual, lajur, indeks, trigger atau migration database untuk memenuhi reka bentuk laporan tanpa audit skema dan kelulusan berasingan.
-12. Jangan ubah skema database v1/v2 atau konfigurasi penandatangan sedia ada sebagai sebahagian daripada kerja dokumentasi ini.
+12. Jangan ubah skema database semasa atau konfigurasi penandatangan sedia ada sebagai sebahagian daripada kerja dokumentasi ini.
 
 ## 3. Ringkasan lima jenis laporan
 
@@ -180,14 +182,17 @@ Kedua-dua variasi Jadual Waktu Kelas menggunakan pengatas yang sama, berdasarkan
 ### 8.3 Syarat Guru Kelas
 
 1. Setiap kelas mesti mempunyai seorang Guru Kelas yang ditetapkan pada rekod kelas.
-2. Guru Kelas dipilih daripada senarai guru Master Data yang berdaftar dan aktif.
+2. Guru Kelas mesti dipilih daripada guru Master Data yang aktif dan mempunyai rekod `teacher_sessions` yang aktif serta sepadan dengan `academic_year_id` dan `session_id` bagi kelas tersebut.
 3. Guru Kelas tidak semestinya guru yang mengajar kelas tersebut dalam jadual waktu.
-4. Jika Guru Kelas belum ditetapkan, preview dan penjanaan Jadual Waktu Kelas disekat.
-5. Sistem memaklumkan pengguna supaya menetapkan Guru Kelas terlebih dahulu.
-6. Syarat ini terpakai kepada kedua-dua variasi Dengan Tandatangan dan Tanpa Tandatangan.
-7. Penetapan Guru Kelas disimpan pada rekod kelas, bukan dipilih semula setiap kali laporan dijana.
-8. Keputusan fungsi ialah seorang Guru Kelas bagi setiap rekod kelas. Tiada medan tahun akademik/sesi tambahan untuk penetapan ini dipersetujui kerana rekod kelas sudah terikat kepada tahun akademik/sesi.
-9. Skema v2 yang diketahui belum mempunyai `classes.class_teacher_id`. Sebarang perubahan skema untuk menyimpan hubungan ini memerlukan audit skema, cadangan dan kelulusan berasingan sebelum migration dilaksanakan.
+4. Seorang guru boleh menjadi Guru Kelas bagi lebih daripada satu kelas.
+5. Jika Guru Kelas belum ditetapkan, preview dan penjanaan Jadual Waktu Kelas disekat.
+6. Sistem memaklumkan pengguna kelas yang memerlukan penetapan Guru Kelas.
+7. Syarat ini terpakai kepada kedua-dua variasi Dengan Tandatangan dan Tanpa Tandatangan.
+8. Penetapan Guru Kelas disimpan pada `classes.class_teacher_id`, bukan dipilih semula setiap kali laporan dijana.
+9. Migration v3 telah dilaksanakan dan disahkan. Medan `classes.class_teacher_id` ialah `INTEGER` nullable dengan foreign key kepada `teachers(id)` dan `ON DELETE RESTRICT`.
+10. Jika guru atau keahlian sesi guru dinyahaktifkan selepas penetapan, ID Guru Kelas dikekalkan. Walau bagaimanapun, preview dan penjanaan/cetakan Jadual Waktu Kelas disekat sehingga Guru Kelas diganti dengan guru yang layak.
+11. Jika tahun akademik atau sesi kelas diubah, kelayakan Guru Kelas mesti disahkan semula. Jika guru sedia ada tidak lagi layak, pengguna mesti memilih Guru Kelas yang layak sebelum perubahan kelas disimpan.
+12. Nama penuh Guru Kelas dipaparkan dalam pengatas laporan.
 
 ## 9. Jadual Waktu Bilik Khas
 
@@ -269,8 +274,8 @@ Ruang tandatangan wujud pada:
 - Tarikh tandatangan mesti ditetapkan oleh pengguna; sistem tidak boleh menganggap tarikh PDF dijana/dicetak sebagai tarikh tandatangan.
 - Pengguna memilih atau memasukkan tarikh tandatangan sebelum preview templat bertandatangan.
 - Tarikh dipaparkan dalam huruf besar.
-- Contoh Bahasa Melayu: `26 NOVEMBER 2026`.
-- Contoh Bahasa Inggeris: nama bulan menggunakan ejaan bahasa Inggeris, contohnya `26 NOVEMBER 2026`.
+- Contoh Bahasa Melayu: `26 MAC 2026`.
+- Contoh Bahasa Inggeris: nama bulan menggunakan ejaan bahasa Inggeris, contohnya `26 MARCH 2026`.
 - Label TARIKH berada di bahagian paling kanan.
 - Tarikh kuat kuasa di bawah jadual (jika templat berkenaan memaparkannya) kekal dalam Bahasa Melayu dan huruf besar, contohnya `26 NOVEMBER 2026`.
 
@@ -395,8 +400,11 @@ Aliran yang dipersetujui:
 
 ### 16.2 Penjanaan PDF akhir
 
-- Butang **JANA PDF** tersedia selepas preview berjaya dijana untuk pilihan semasa.
-- PDF akhir mesti menggunakan sumber data, pilihan dan enjin susun atur yang sama seperti preview.
+- Butang **JANA PDF** tersedia hanya selepas preview berjaya dijana dan masih sah untuk pilihan semasa.
+- PDF akhir ialah fail PDF preview sementara yang sama tepat; sistem menyalin atau menyimpan fail tersebut ke lokasi akhir yang dipilih pengguna tanpa menjana semula kandungan PDF daripada database.
+- Sistem tidak boleh membina semula PDF ketika **JANA PDF** ditekan. Ini memastikan fail akhir sama tepat dengan dokumen yang telah disemak pengguna.
+- Jika fail preview sementara tiada, rosak atau tidak boleh dibaca, proses **JANA PDF** disekat dan pengguna diminta menjana preview semula.
+- Perubahan pada mana-mana pilihan atau data yang mempengaruhi laporan membatalkan preview sedia ada. Pengguna mesti menjana dan menyemak preview baharu sebelum PDF akhir boleh dihasilkan.
 - Proses tidak boleh mengubah jadual waktu atau database.
 - Pengguna tidak perlu menjana fail secara berasingan bagi setiap rekod.
 
@@ -407,7 +415,9 @@ Sistem mesti menjalankan pengesahan yang berkaitan dengan jenis laporan dan reko
 - Tahun akademik, sesi dan versi jadual waktu yang sah telah dipilih.
 - Rekod yang dipilih wujud dalam versi jadual waktu tersebut.
 - Nama ringkasan Guru, Subjek, Kelas dan Bilik yang berkaitan telah lengkap.
-- Jadual Waktu Kelas: Guru Kelas mesti telah ditetapkan dan masih aktif.
+- Jadual Waktu Kelas: `classes.class_teacher_id` mesti merujuk kepada guru yang masih aktif.
+- Jadual Waktu Kelas: guru tersebut mesti mempunyai rekod `teacher_sessions` yang aktif dan sepadan dengan tahun akademik serta sesi kelas berkenaan.
+- Jika Guru Kelas tiada, tidak aktif atau tidak lagi layak untuk tahun akademik/sesi kelas, preview dan penjanaan/cetakan disekat sehingga penetapan diperbetulkan.
 - Templat bertandatangan: Prepared By dan Verified By mesti lengkap.
 - Penandatangan yang dipilih mesti masih aktif.
 - Prepared By dan Verified By mesti individu berbeza bagi jenis jadual yang sama.
@@ -435,7 +445,8 @@ Jangan tambah nilai `schedule_type` baharu untuk laporan Hari atau Subjek. Kekal
 Perkara berikut tidak boleh diandaikan atau dilaksanakan tanpa keputusan lanjut:
 
 1. **Butiran saiz teks khusus:** saiz bagi elemen yang tidak disenaraikan dalam Seksyen 4.1 boleh diperincikan jika ujian visual menunjukkan keperluan.
-2. **Pelaksanaan Guru Kelas:** hubungan pada rekod kelas memerlukan audit dan kelulusan perubahan skema berasingan kerana skema v2 yang diketahui belum mempunyai medan tersebut.
+
+Pelaksanaan hubungan Guru Kelas pada database bukan lagi perkara tertangguh: Migration v3 telah selesai dan disahkan. Pembangunan fungsi pengurusan Guru Kelas, pengesahan kelayakan dan integrasi laporan masih perlu dilaksanakan dalam skop pembangunan aplikasi yang berasingan.
 
 ## 20. Had skop dan disiplin teknikal
 
