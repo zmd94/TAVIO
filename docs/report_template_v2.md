@@ -434,10 +434,8 @@ Jangan tambah nilai `schedule_type` baharu untuk laporan Hari atau Subjek. Kekal
 
 Perkara berikut tidak boleh diandaikan atau dilaksanakan tanpa keputusan lanjut:
 
-1. **Tarikh tandatangan:** sumber tarikh belum diputuskan secara khusus — tarikh PDF dijana/dicetak atau tarikh tandatangan sebenar.
-2. **Jadual Waktu Bilik Khas:** butiran visual penuh dan contoh susun atur khusus perlu disahkan, walaupun struktur asas seperti Jadual Waktu Subjek dan ruang tandatangan telah dipersetujui.
-3. **Butiran saiz teks khusus:** saiz bagi elemen yang tidak disenaraikan dalam Seksyen 4.1 boleh diperincikan jika ujian visual menunjukkan keperluan.
-4. **Pelaksanaan Guru Kelas:** hubungan pada rekod kelas memerlukan audit dan kelulusan perubahan skema berasingan kerana skema v2 yang diketahui belum mempunyai medan tersebut.
+1. **Butiran saiz teks khusus:** saiz bagi elemen yang tidak disenaraikan dalam Seksyen 4.1 boleh diperincikan jika ujian visual menunjukkan keperluan.
+2. **Pelaksanaan Guru Kelas:** hubungan pada rekod kelas memerlukan audit dan kelulusan perubahan skema berasingan kerana skema v2 yang diketahui belum mempunyai medan tersebut.
 
 ## 20. Had skop dan disiplin teknikal
 
