@@ -266,6 +266,8 @@ Ruang tandatangan wujud pada:
 ### 12.4 Bahasa tarikh
 
 - Tarikh tandatangan mengikut bahasa label tandatangan yang dipilih.
+- Tarikh tandatangan mesti ditetapkan oleh pengguna; sistem tidak boleh menganggap tarikh PDF dijana/dicetak sebagai tarikh tandatangan.
+- Pengguna memilih atau memasukkan tarikh tandatangan sebelum preview templat bertandatangan.
 - Tarikh dipaparkan dalam huruf besar.
 - Contoh Bahasa Melayu: `26 NOVEMBER 2026`.
 - Contoh Bahasa Inggeris: nama bulan menggunakan ejaan bahasa Inggeris, contohnya `26 NOVEMBER 2026`.
@@ -274,7 +276,7 @@ Ruang tandatangan wujud pada:
 
 ### 12.5 Perkara yang belum dimuktamadkan
 
-Maksud sumber tarikh pada ruang tandatangan belum disahkan secara khusus: sama ada tarikh PDF dijana/dicetak atau tarikh tandatangan sebenar. Jangan membuat andaian sehingga perkara ini diputuskan.
+Cara input tarikh tandatangan (date picker atau input lain), serta sama ada satu tarikh yang sama digunakan untuk semua rekod dalam satu fail PDF atau tarikh boleh ditetapkan secara berasingan bagi setiap rekod, belum diputuskan. Jangan membuat andaian sehingga perkara ini diputuskan.
 
 ## 13. Pemilihan versi jadual waktu dan tarikh kuat kuasa
 
