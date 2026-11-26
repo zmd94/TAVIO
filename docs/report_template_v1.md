@@ -1,5 +1,5 @@
 # TAVIO — Spesifikasi Templat Laporan Jadual Waktu
-Versi dokumen: 1.0  
+Versi dokumen: 1.1  
 Status: Draf spesifikasi berdasarkan keputusan reka bentuk yang telah dipersetujui  
 Skop: Reka bentuk dan tingkah laku lima jenis laporan jadual waktu
 
@@ -152,7 +152,32 @@ Jadual Waktu Hari dan Jadual Waktu Subjek tidak memerlukan konfigurasi tandatang
 
 Prepared By dan Verified By mesti kekal mengikut peraturan Schedule Signatories sedia ada, termasuk peraturan bahawa kedua-dua pentadbir bagi satu jenis jadual adalah berbeza.
 
-## 11. Perkara yang perlu diperincikan sebelum pembangunan
+
+## 11. Pemilihan versi jadual waktu dan tarikh kuat kuasa
+
+### 11.1 Pemilihan versi
+1. Sebelum menjana laporan, pengguna mesti memilih Tahun Akademik, Sesi dan Versi Jadual Waktu.
+2. Senarai versi ditapis berdasarkan Tahun Akademik dan Sesi yang dipilih. Hanya versi yang benar-benar wujud bagi kombinasi tersebut boleh dipilih.
+3. Pengguna memilih versi secara jelas. Sistem tidak boleh menganggap versi bernombor paling tinggi sebagai versi rasmi atau aktif.
+4. Jangan memilih versi secara automatik berdasarkan nombor versi, tarikh simpan atau tarikh kuat kuasa.
+5. Semua laporan yang dijana dalam satu proses hendaklah menggunakan ID versi jadual waktu yang sama.
+6. Paparkan maklumat yang membantu pengguna membezakan versi, sekurang-kurangnya nombor versi dan nama versi. Jika tersedia, paparkan juga tarikh kuat kuasa dan tarikh simpan.
+7. Jangan gunakan autosave atau draf workspace sebagai sumber laporan. Sumber laporan mestilah rekod versi yang disimpan dalam `timetable_versions`.
+
+### 11.2 Tarikh kuat kuasa
+1. Tarikh kuat kuasa laporan diambil daripada `timetable_versions.effective_date` bagi versi yang dipilih.
+2. Jangan menggantikan tarikh kuat kuasa dengan tarikh semasa, tarikh simpan atau tarikh cetakan.
+3. Jika `effective_date` mempunyai nilai, paparkan tarikh tersebut pada bahagian templat yang telah ditetapkan.
+4. Jika `effective_date` NULL, sistem mesti memberi amaran bahawa tarikh kuat kuasa belum ditetapkan. Pengguna boleh membatalkan proses atau meneruskan cetakan tanpa tarikh kuat kuasa; sistem tidak boleh mereka atau mengisi tarikh secara automatik.
+5. Pemilihan atau cetakan laporan tidak boleh mengubah `effective_date` atau mana-mana rekod database.
+
+### 11.3 Batasan skema semasa
+- Jadual `timetable_versions` mempunyai `version_number`, `version_name`, `effective_date` dan `saved_at`.
+- Skema semasa tidak mempunyai penanda `is_active` atau `is_current`.
+- Oleh itu, modul laporan tidak boleh mendakwa sesuatu versi sebagai versi rasmi/aktif melainkan fungsi pengurusan versi dan peraturan penetapannya dibangunkan serta diluluskan kemudian.
+- Tiada perubahan skema atau migration diperlukan untuk melaksanakan pemilihan manual ini.
+
+## 12. Perkara yang perlu diperincikan sebelum pembangunan
 1. Saiz kertas, orientasi, margin, fon, saiz teks dan skala cetakan akhir bagi setiap templat.
 2. Tingkah laku apabila logo sekolah atau Guru Kelas belum ditetapkan.
 3. Format tepat nama ringkas guru dan kelas yang digunakan dalam setiap laporan.
@@ -164,7 +189,7 @@ Prepared By dan Verified By mesti kekal mengikut peraturan Schedule Signatories 
 
 Jangan membuat andaian senyap tentang perkara yang belum diputuskan. Bentangkan pilihan untuk kelulusan sebelum mengunci tingkah laku.
 
-## 12. Had skop dokumen
+## 13. Had skop dokumen
 Dokumen ini merekodkan reka bentuk laporan dan keperluan fungsinya sahaja. Ia bukan kebenaran untuk:
 - mengubah skema database;
 - menambah migration, jadual, lajur, indeks atau trigger;
