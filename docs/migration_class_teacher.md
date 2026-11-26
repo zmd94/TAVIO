@@ -1,133 +1,150 @@
-# Migration v3 — Penetapan Guru Kelas
+# Database Migration v3 — Guru Kelas
 
-**Status:** Perubahan kod Migration v3 dan ujian automatik telah disediakan; menunggu pengesahan ujian manual  
-**Skop:** Menyimpan seorang Guru Kelas bagi setiap rekod kelas pada peringkat skema database  
-**Penting:** Hanya perubahan skema database (Migration v3) dan ujian berkaitannya telah dilaksanakan dalam pusingan ini. UI dan fungsi pengurusan Guru Kelas pada lapisan aplikasi belum dibangunkan.
+**Status:** Kod migration dan ujian automatik telah disediakan; pengesahan ujian masih menunggu.  
+**Skop pusingan ini:** Menambah medan Guru Kelas pada jadual classes melalui Database Migration v3.  
+**Belum termasuk:** UI pengurusan Guru Kelas, validasi pada lapisan aplikasi dan integrasi laporan PDF.
 
-## 1. Latar belakang
+## 1. Latar belakang dan keputusan reka bentuk
 
-Audit terhadap skema semasa mendapati jadual `classes` belum mempunyai medan untuk menetapkan Guru Kelas.
+Audit skema mendapati jadual classes sebelum Migration v3 belum mempunyai medan untuk menyimpan Guru Kelas.
 
-Jadual `classes` sedia ada mengandungi `academic_year_id`, `session_id`, `short_name`, `name`, `home_room_id` dan `is_active`, selain medan pengurusan rekod. Jadual `teachers` menyimpan maklumat guru dan status `is_active`. Jadual `teacher_sessions` menghubungkan guru kepada tahun akademik dan sesi serta mempunyai status `is_active`.
+Jadual berkaitan:
+- **classes** menyimpan rekod kelas, termasuk academic_year_id dan session_id.
+- **teachers** menyimpan maklumat guru dan status is_active.
+- **teacher_sessions** menghubungkan guru kepada tahun akademik dan sesi serta mempunyai status is_active.
 
-Keputusan fungsi yang telah dipersetujui:
-- Setiap rekod kelas mempunyai seorang Guru Kelas.
-- Guru Kelas dipilih daripada Master Data Guru.
-- Penetapan disimpan pada rekod kelas.
-- Tiada medan tahun akademik atau sesi tambahan diperlukan pada penetapan kerana kedua-duanya sudah terdapat pada rekod kelas.
-- Guru Kelas boleh berbeza daripada guru yang mengajar kelas tersebut.
-- Guru Kelas wajib ditetapkan sebelum preview atau cetakan Jadual Waktu Kelas.
-- Jika guru yang ditetapkan dinyahaktifkan kemudian, penetapan tidak dipadam secara automatik; sistem perlu memberi amaran dan meminta penggantian sebelum preview/cetakan.
+Keputusan reka bentuk berikut telah dipersetujui:
 
-## 2. Cadangan struktur data
+1. Setiap kelas boleh mempunyai seorang Guru Kelas yang disimpan pada rekod kelas.
+2. Guru Kelas dipilih daripada Master Data Guru dan mesti mempunyai keahlian sesi yang sah bagi tahun akademik serta sesi kelas berkenaan.
+3. Guru Kelas boleh berbeza daripada guru yang mengajar kelas tersebut.
+4. Seorang guru boleh ditetapkan sebagai Guru Kelas untuk lebih daripada satu kelas.
+5. Kelas sedia ada tidak akan diberikan Guru Kelas secara automatik.
+6. Jika guru atau keahlian sesinya dinyahaktifkan selepas penetapan, penetapan sedia ada dikekalkan. Preview dan cetakan Jadual Waktu Kelas perlu disekat sehingga penetapan digantikan dengan guru yang layak.
+7. Tiada jadual, indeks atau trigger baharu dalam skop asas.
+8. Perubahan skema menggunakan ALTER TABLE, bukan rebuild jadual classes.
 
-Cadangan medan baharu pada jadual `classes`:
+## 2. Skema yang dilaksanakan
+
+Migration v3 menambah medan berikut pada jadual classes:
 
 | Medan | Jenis | Nullable | Tujuan |
 |---|---|---:|---|
-| `class_teacher_id` | INTEGER | Ya | Merujuk kepada ID guru yang ditetapkan sebagai Guru Kelas |
+| class_teacher_id | INTEGER | Ya | Merujuk kepada ID guru yang ditetapkan sebagai Guru Kelas |
 
-Nama medan dicadangkan sebagai `class_teacher_id` kerana jelas dan konsisten dengan penamaan hubungan ID dalam skema sedia ada.
+SQL migration:
 
-### Foreign key
+    ALTER TABLE classes
+    ADD COLUMN class_teacher_id INTEGER
+    REFERENCES teachers(id) ON DELETE RESTRICT;
 
-Cadangan asas:
-
-```sql
-class_teacher_id INTEGER,
-FOREIGN KEY (class_teacher_id)
-    REFERENCES teachers(id) ON DELETE RESTRICT
-```
-
-- `NULL` dibenarkan supaya rekod kelas sedia ada kekal sah selepas migration.
-- `ON DELETE RESTRICT` menghalang rekod guru yang masih digunakan sebagai Guru Kelas daripada dipadam secara fizikal.
+Peraturan skema:
+- NULL dibenarkan supaya rekod kelas sedia ada kekal sah selepas migration.
+- Foreign key merujuk kepada teachers(id).
+- ON DELETE RESTRICT menghalang guru yang masih dirujuk sebagai Guru Kelas daripada dipadam secara fizikal.
 - Penyahaktifan guru tidak memadam atau mengosongkan penetapan.
 
-**Perkara integriti sesi:** Hubungan terus kepada `teachers(id)` tidak memastikan guru mempunyai rekod keahlian yang aktif dalam `teacher_sessions` bagi tahun akademik dan sesi kelas tersebut. Oleh itu, servis aplikasi wajib mengesahkan padanan `academic_year_id`, `session_id`, `teacher_id` dan status aktif pada kedua-dua rekod guru dan `teacher_sessions` sebelum penetapan disimpan. Jika kelulusan memerlukan jaminan pada peringkat database juga, reka bentuk foreign key komposit dan keperluan rebuild jadual `classes` perlu dinilai sebagai pilihan berasingan sebelum migration; ia tidak termasuk secara automatik dalam cadangan asas ini.
+**Pengesahan keahlian sesi:** Foreign key terus kepada teachers(id) tidak memastikan guru mempunyai rekod teacher_sessions yang aktif bagi tahun akademik dan sesi kelas tersebut. Oleh itu, lapisan aplikasi mesti mengesahkan padanan academic_year_id, session_id, teacher_id serta status aktif pada rekod guru dan teacher_sessions sebelum penetapan disimpan. Pengesahan aplikasi ini belum dilaksanakan dalam pusingan migration v3 ini.
 
-## 3. Peraturan aplikasi
+## 3. Butiran implementasi migration
 
-1. Paparkan pilihan Guru Kelas daripada guru yang aktif dan mempunyai rekod `teacher_sessions` aktif untuk tahun akademik serta sesi kelas berkenaan.
-2. Benarkan satu guru ditetapkan kepada lebih daripada satu kelas; tiada peraturan unik satu guru untuk satu kelas dicadangkan.
-3. Simpan pilihan pada rekod `classes` yang berkenaan.
-4. Apabila kelas ditukar tahun akademik atau sesi, sahkan semula kelayakan Guru Kelas. Jika tidak lagi sepadan, minta pengguna memilih guru yang layak sebelum menyimpan perubahan.
-5. Jika guru atau keahlian sesi dinyahaktifkan selepas penetapan, kekalkan ID penetapan untuk mengelakkan kehilangan sejarah. Paparkan amaran dan sekat preview/cetakan Jadual Waktu Kelas sehingga penetapan diganti dengan guru yang layak.
-6. Jika `class_teacher_id` masih `NULL`, sekat preview/cetakan Jadual Waktu Kelas dan nyatakan kelas yang belum mempunyai Guru Kelas.
-7. Nama Guru Kelas pada PDF menggunakan nama penuh daripada Master Data Guru, bukan nama ringkasan.
+Perubahan kod migration:
+- SQL skema v3: **tavio/src/tavio/database/schema_v3.py**.
+- Pendaftaran migration: **tavio/src/tavio/database/migrations.py**.
+- Migration v3 didaftarkan selepas migration v2 dan menaik taraf PRAGMA user_version kepada 3.
+
+Strategi yang digunakan ialah ALTER TABLE ADD COLUMN. Kolum baharu bersifat nullable dan tidak mempunyai nilai DEFAULT bukan NULL, maka pendekatan ini boleh digunakan tanpa rebuild jadual.
+
+Kesan yang dijangka:
+- Semua data kelas sedia ada dikekalkan.
+- Rekod kelas sedia ada menerima nilai class_teacher_id = NULL.
+- Tiada auto-assignment dibuat.
+- Indeks, trigger dan struktur jadual lain tidak sepatutnya berubah akibat penambahan kolum ini.
+
+## 4. Peraturan aplikasi yang perlu dibangunkan
+
+Perkara berikut ialah keperluan untuk kerja susulan; ia **belum dilaksanakan** oleh migration v3 ini:
+
+1. Paparkan pilihan Guru Kelas daripada guru yang aktif dan mempunyai rekod teacher_sessions aktif bagi tahun akademik serta sesi kelas berkenaan.
+2. Benarkan seorang guru ditetapkan kepada lebih daripada satu kelas.
+3. Simpan pilihan pada rekod classes yang berkenaan.
+4. Apabila tahun akademik atau sesi kelas berubah, sahkan semula kelayakan Guru Kelas. Jika tidak lagi sepadan, minta pengguna memilih guru yang layak sebelum menyimpan perubahan.
+5. Jika guru atau keahlian sesi dinyahaktifkan selepas penetapan, kekalkan ID penetapan. Paparkan amaran dan sekat preview/cetakan Jadual Waktu Kelas sehingga penetapan diganti.
+6. Jika class_teacher_id masih NULL, sekat preview/cetakan dan nyatakan kelas yang belum mempunyai Guru Kelas.
+7. Pada PDF, paparkan nama penuh Guru Kelas daripada Master Data Guru, bukan nama ringkasan.
 8. Penetapan Guru Kelas tidak mengubah senarai guru mengajar, teaching assignments atau data jadual waktu.
 
-## 4. Kesan terhadap rekod sedia ada
+## 5. Kesan terhadap rekod sedia ada
 
-- Semua rekod kelas sedia ada menerima nilai `NULL` pada medan baharu.
-- Tiada guru akan ditetapkan secara automatik atau diteka daripada rekod pengajaran.
-- Pengguna perlu melengkapkan penetapan Guru Kelas secara manual.
-- Rekod dan medan kelas sedia ada mesti dikekalkan.
-- Migration tidak boleh mengubah atau memadam data jadual waktu.
+- Semua rekod kelas sedia ada dikekalkan.
+- Nilai awal class_teacher_id bagi rekod sedia ada ialah NULL.
+- Tiada guru ditetapkan secara automatik atau diteka daripada rekod pengajaran.
+- Pengguna perlu melengkapkan penetapan Guru Kelas melalui fungsi aplikasi apabila fungsi tersebut dibangunkan.
+- Migration tidak mengubah atau memadam data jadual waktu.
 
-## 5. Strategi migration dan risiko SQLite
+## 6. Ujian dan status pengesahan
 
-Pendekatan yang dipilih dan dilaksanakan untuk Migration v3 ialah **tambah medan dengan `ALTER TABLE`**, bukannya rebuild jadual `classes`:
+### Ujian migration yang telah ditambah
 
-```sql
-ALTER TABLE classes
-ADD COLUMN class_teacher_id INTEGER
-REFERENCES teachers(id) ON DELETE RESTRICT;
-```
+Ujian berkaitan migration v3 telah ditulis dalam **tavio/tests/test_database.py**. Liputannya termasuk:
+- Database baharu melalui migration sehingga versi 3.
+- Naik taraf database v2 ke v3 dengan mengekalkan data sedia ada.
+- Nilai class_teacher_id kekal NULL bagi rekod kelas lama.
+- Jenis kolum, nullable, foreign key dan tindakan ON DELETE RESTRICT.
+- Penolakan ID guru yang tidak wujud dan pemadaman guru yang masih dirujuk.
+- Migration gagal yang perlu rollback tanpa menaikkan user_version atau meninggalkan kolum baharu.
+- Pengulangan inisialisasi database tanpa mengaplikasikan migration sekali lagi.
 
-Rasional pemilihan pendekatan ini:
-- Kolum `class_teacher_id` bersifat nullable tanpa kekangan `NOT NULL` dan tanpa nilai `DEFAULT` bukan `NULL`, maka SQLite menyokong `ALTER TABLE ... ADD COLUMN ... REFERENCES ... ON DELETE RESTRICT` secara terus dan selamat.
-- Semua rekod `classes` sedia ada mengekalkan keseluruhan data asal dan menerima `class_teacher_id = NULL` tanpa sebarang auto-assignment.
-- Semua indeks, trigger dan kekangan sedia ada pada jadual `classes` serta jadual lain yang merujuk `classes` kekal utuh tanpa risiko kerosakan akibat rebuild jadual.
+**Penting:** Ujian tersebut telah ditulis tetapi belum dijalankan dan belum disahkan lulus. Keputusan pytest, Ruff serta pemeriksaan manual database masih belum tersedia.
 
-Implementasi skema diletakkan dalam `tavio/src/tavio/database/schema_v3.py` dan didaftarkan sebagai Migration v3 dalam `DEFAULT_MIGRATIONS` (`tavio/src/tavio/database/migrations.py`) untuk menaik taraf `PRAGMA user_version` kepada `3`.
+### Ujian susulan selepas fungsi aplikasi dibangunkan
 
-## 6. Pelan ujian yang diperlukan
-
-### Migration dan integriti database
-- Database baharu boleh dibina sehingga versi skema selepas migration.
-- Database v2 sedia ada boleh dinaik taraf tanpa kehilangan rekod atau nilai kelas.
-- Semua rekod kelas lama mempunyai `class_teacher_id = NULL`.
-- `PRAGMA foreign_key_check` tidak melaporkan ralat.
-- `PRAGMA integrity_check` mengembalikan `ok`.
-- Backup sebelum migration boleh dipulihkan.
-- Migration tidak menghasilkan perubahan pada jadual lain yang tidak berkaitan.
-
-### Peraturan penetapan
-- Guru aktif dengan `teacher_sessions` aktif bagi tahun dan sesi yang betul boleh ditetapkan.
-- Guru daripada sesi atau tahun akademik lain ditolak.
+Perkara berikut belum diliputi sepenuhnya oleh ujian migration dan perlu diuji apabila fungsi berkaitan tersedia:
+- Guru daripada tahun akademik atau sesi lain ditolak.
 - Guru tidak aktif atau keahlian sesi tidak aktif tidak boleh dipilih.
-- Penetapan guru kepada beberapa kelas dibenarkan.
-- Pemadaman fizikal guru yang masih dirujuk dihalang.
-- Penyahaktifan guru tidak mengosongkan penetapan sedia ada, tetapi menghasilkan amaran/sekatan laporan.
+- Penetapan kepada beberapa kelas dibenarkan.
+- Penyahaktifan guru mengekalkan penetapan tetapi mencetuskan amaran/sekatan laporan.
 - Pertukaran tahun atau sesi kelas mengesahkan semula kelayakan guru.
-
-### Laporan Jadual Waktu Kelas
 - Kelas tanpa Guru Kelas disekat daripada preview dan cetakan.
-- Kelas dengan Guru Kelas aktif memaparkan nama penuh yang betul.
-- Guru Kelas tidak disamakan dengan guru yang mengajar kelas.
-- Semakan ini tidak mengubah data database ketika preview atau cetakan.
+- PDF memaparkan nama penuh Guru Kelas yang betul dan tidak menyamakannya dengan guru mengajar.
+- Preview atau cetakan tidak mengubah data database.
 
-## 7. Perkara di luar skop
+## 7. Skop yang tidak berubah
 
-Cadangan ini tidak merangkumi:
-- Jadual baharu, indeks baharu atau trigger baharu.
+Perkara berikut kekal di luar skop Migration v3:
+- UI pemilihan dan pengurusan Guru Kelas.
+- Validasi keahlian teacher_sessions pada lapisan aplikasi.
+- Pengendalian penetapan apabila guru atau keahlian sesi dinyahaktifkan.
+- Integrasi Guru Kelas dalam laporan PDF Jadual Waktu Kelas.
 - Penetapan Guru Kelas secara automatik.
 - Perubahan kepada struktur guru mengajar atau solver.
-- Perubahan kepada laporan selain Jadual Waktu Kelas.
-- Pelaksanaan UI atau migration sebenar.
+- Perubahan kepada laporan selain keperluan Guru Kelas yang dinyatakan.
 
-Sebarang keperluan jadual, indeks atau trigger tambahan mesti dibentangkan sebagai perubahan berasingan dan mendapat kelulusan terlebih dahulu.
+Tiada jadual, indeks atau trigger baharu ditambah dalam skop yang diluluskan. Sebarang peluasan skema memerlukan cadangan dan kelulusan berasingan.
 
-## 8. Keputusan yang diperlukan sebelum pelaksanaan
+## 8. Rekod kelulusan
 
-Sila semak dan sahkan perkara berikut:
+Perkara berikut telah disemak dan dipersetujui sebelum implementasi:
 
-1. Nama medan `class_teacher_id` dan lokasi pada jadual `classes`.
-2. Foreign key terus kepada `teachers(id)` dengan `ON DELETE RESTRICT`, bersama pengesahan keahlian sesi pada lapisan aplikasi.
-3. Nilai `NULL` untuk rekod kelas sedia ada; tiada auto-assign.
-4. Guru yang dinyahaktifkan mengekalkan penetapan sedia ada tetapi menghalang preview/cetakan sehingga diganti.
-5. Tiada jadual, indeks atau trigger baharu dalam skop cadangan asas.
+1. Medan class_teacher_id ditambah pada jadual classes.
+2. Foreign key terus kepada teachers(id) menggunakan ON DELETE RESTRICT, dengan validasi keahlian sesi pada lapisan aplikasi.
+3. Rekod kelas sedia ada kekal dengan nilai NULL; tiada auto-assignment.
+4. Guru yang dinyahaktifkan mengekalkan penetapan sedia ada, tetapi preview/cetakan perlu disekat sehingga penetapan diganti.
+5. Tiada jadual, indeks atau trigger baharu dalam skop asas.
+6. Migration dilaksanakan menggunakan ALTER TABLE, tanpa rebuild jadual classes.
 
-**Status pelaksanaan:**
-- **Skema Database (Migration v3):** Perubahan kod telah disediakan (`tavio/src/tavio/database/schema_v3.py`, `tavio/src/tavio/database/migrations.py`) berserta ujian automatik dalam `tavio/tests/test_database.py`, dan **belum disahkan** melalui pelaksanaan `pytest` / Ruff (menunggu semakan dan ujian manual).
-- **UI & Pengurusan Guru Kelas (lapisan aplikasi & laporan PDF):** **Belum dibangunkan** dalam tugasan ini (termasuk pengesahan keahlian `teacher_sessions`, pemilihan Guru Kelas pada Master Data Kelas, dan sekatan preview/cetakan Jadual Waktu Kelas).
+---
+
+## Ringkasan status
+
+| Komponen | Status |
+|---|---|
+| Audit skema dan keputusan reka bentuk | Dipersetujui |
+| Migration v3 — tambah classes.class_teacher_id | Kod disediakan |
+| Pendaftaran migration dan naik taraf user_version | Kod disediakan |
+| Ujian automatik migration v3 | Ditulis, belum dijalankan |
+| Pengesahan pytest dan Ruff | Menunggu |
+| Ujian manual database pada Windows | Menunggu |
+| UI pemilihan Guru Kelas | Belum dibangunkan |
+| Validasi guru dan teacher_sessions | Belum dibangunkan |
+| Integrasi Guru Kelas dalam PDF Jadual Waktu Kelas | Belum dibangunkan |
