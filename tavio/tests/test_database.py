@@ -99,20 +99,20 @@ def test_initialize_applies_v1_schema_and_seeds(tmp_path: Path) -> None:
     assert second_result.applied_versions == ()
 
 
-def test_initialize_applies_default_migrations_from_zero_to_v2(tmp_path: Path) -> None:
+def test_initialize_applies_default_migrations_from_zero_to_v3(tmp_path: Path) -> None:
     db_path = tmp_path / "tavio.db"
     manager = DatabaseManager(db_path)
 
-    assert [m.version for m in DEFAULT_MIGRATIONS] == [1, 2]
+    assert [m.version for m in DEFAULT_MIGRATIONS] == [1, 2, 3]
 
     result = manager.initialize()
 
     assert db_path.is_file()
     assert result.initial_version == 0
-    assert result.final_version == 2
-    assert result.applied_versions == (1, 2)
-    assert manager.supported_version == 2
-    assert manager.get_schema_version() == 2
+    assert result.final_version == 3
+    assert result.applied_versions == (1, 2, 3)
+    assert manager.supported_version == 3
+    assert manager.get_schema_version() == 3
 
     with manager.connection() as conn:
         tables = {
@@ -132,9 +132,14 @@ def test_initialize_applies_default_migrations_from_zero_to_v2(tmp_path: Path) -
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
         ]
         fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        integrity_rows = conn.execute("PRAGMA integrity_check").fetchall()
         school_profile_cols = {
             row["name"]: row for row in conn.execute("PRAGMA table_info(school_profile)").fetchall()
         }
+        classes_cols = {
+            row["name"]: row for row in conn.execute("PRAGMA table_info(classes)").fetchall()
+        }
+        classes_fks = conn.execute("PRAGMA foreign_key_list(classes)").fetchall()
         admin_rows = conn.execute("SELECT * FROM school_administrators").fetchall()
         signatory_rows = conn.execute(
             "SELECT schedule_type, prepared_by_administrator_id, verified_by_administrator_id "
@@ -148,10 +153,22 @@ def test_initialize_applies_default_migrations_from_zero_to_v2(tmp_path: Path) -
     assert sum(1 for name in custom_indexes if name.startswith("idx_")) == 22
     assert len(triggers) == 64
     assert fk_violations == []
+    assert [tuple(row) for row in integrity_rows] == [("ok",)]
     assert "logo_path" in school_profile_cols
     assert school_profile_cols["logo_path"]["notnull"] == 0
     assert school_profile_cols["logo_path"]["type"] == "TEXT"
     assert "principal_name" in school_profile_cols
+    assert "class_teacher_id" in classes_cols
+    assert classes_cols["class_teacher_id"]["type"] == "INTEGER"
+    assert classes_cols["class_teacher_id"]["notnull"] == 0
+    assert classes_cols["class_teacher_id"]["dflt_value"] is None
+    assert any(
+        fk["table"] == "teachers"
+        and fk["from"] == "class_teacher_id"
+        and fk["to"] == "id"
+        and fk["on_delete"] == "RESTRICT"
+        for fk in classes_fks
+    )
     assert admin_rows == []
     assert [(r["schedule_type"], r["prepared_by_administrator_id"], r["verified_by_administrator_id"]) for r in signatory_rows] == [
         ("CLASS", None, None),
@@ -160,8 +177,8 @@ def test_initialize_applies_default_migrations_from_zero_to_v2(tmp_path: Path) -
     ]
 
     second_result = manager.initialize()
-    assert second_result.initial_version == 2
-    assert second_result.final_version == 2
+    assert second_result.initial_version == 3
+    assert second_result.final_version == 3
     assert second_result.applied_versions == ()
 
     with manager.connection() as conn:
@@ -177,8 +194,8 @@ def test_initialize_integrates_with_app_paths(isolated_tavio_dir: Path) -> None:
 
     assert manager.db_path == paths.db_path.resolve()
     assert paths.db_path.is_file()
-    assert result.final_version == 2
-    assert result.applied_versions == (1, 2)
+    assert result.final_version == 3
+    assert result.applied_versions == (1, 2, 3)
 
 
 def test_parent_directories_are_created_automatically(tmp_path: Path) -> None:
@@ -448,13 +465,13 @@ def test_connections_are_closed_after_normal_and_error_exits(tmp_path: Path) -> 
     manager.initialize()
 
     with manager.connection() as conn:
-        assert get_schema_version(conn) == 2
+        assert get_schema_version(conn) == 3
 
     with pytest.raises(sqlite3.ProgrammingError, match="closed"):
         conn.execute("SELECT 1")
 
     with pytest.raises(ValueError, match="trigger"), manager.connection() as err_conn:
-        assert get_schema_version(err_conn) == 2
+        assert get_schema_version(err_conn) == 3
         raise ValueError("trigger")
 
     with pytest.raises(sqlite3.ProgrammingError, match="closed"):
@@ -784,7 +801,7 @@ def test_v1_to_v2_upgrade_preserves_data_and_backfills_principal_name(tmp_path: 
             "INSERT INTO teachers (id, short_name, full_name) VALUES (1, 'CIKGU A', 'Ahmad bin Ali')"
         )
 
-    v2_manager = DatabaseManager(db_path)
+    v2_manager = DatabaseManager(db_path, migrations=DEFAULT_MIGRATIONS[:2])
     upgrade_result = v2_manager.initialize()
 
     assert upgrade_result.initial_version == 1
@@ -883,7 +900,7 @@ def test_v2_migration_skips_backfill_when_principal_name_empty_or_null(
             (blank_principal,),
         )
 
-    v2_manager = DatabaseManager(db_path)
+    v2_manager = DatabaseManager(db_path, migrations=DEFAULT_MIGRATIONS[:2])
     result = v2_manager.initialize()
     assert result.applied_versions == (2,)
 
@@ -1053,6 +1070,274 @@ def test_failed_v2_migration_rolls_back_all_v2_changes_and_preserves_v1(tmp_path
     assert profile is not None
     assert (profile["school_name"], profile["principal_name"]) == ("SK Kekal", "Puan Rosnah")
     assert fk_violations == []
+
+
+def test_v2_to_v3_upgrade_preserves_data_and_leaves_class_teacher_id_null(tmp_path: Path) -> None:
+    db_path = tmp_path / "upgrade_v2_to_v3.db"
+    v2_manager = DatabaseManager(db_path, migrations=DEFAULT_MIGRATIONS[:2])
+    v2_init = v2_manager.initialize()
+    assert v2_init.final_version == 2
+
+    with v2_manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO academic_years (id, year_code, name, start_date, end_date) "
+            "VALUES (1, '2026', 'Tahun 2026', '2026-01-01', '2026-12-31')"
+        )
+        conn.execute(
+            "INSERT INTO school_sessions (id, academic_year_id, session_code, name, sort_order) "
+            "VALUES (1, 1, 'PAGI', 'Sesi Pagi', 1)"
+        )
+        conn.execute(
+            "INSERT INTO education_levels (id, academic_year_id, session_id, level_code, name, sort_order) "
+            "VALUES (1, 1, 1, 'T1', 'Tingkatan 1', 1)"
+        )
+        conn.execute(
+            "INSERT INTO rooms (id, short_name, name, room_type, capacity) "
+            "VALUES (1, 'B101', 'Bilik 101', 'REGULAR', 35)"
+        )
+        conn.execute(
+            "INSERT INTO classes ("
+            "    id, academic_year_id, session_id, education_level_id, short_name, name, "
+            "    student_count, home_room_id, is_active"
+            ") VALUES "
+            "(1, 1, 1, 1, '1A', '1 Amanah', 32, 1, 1), "
+            "(2, 1, 1, 1, '1B', '1 Bestari', 28, NULL, 0)"
+        )
+        conn.execute(
+            "INSERT INTO teachers (id, short_name, full_name) VALUES "
+            "(1, 'CG A', 'Ahmad bin Ali'), "
+            "(2, 'CG B', 'Siti binti Hassan')"
+        )
+        conn.execute(
+            "INSERT INTO subjects (id, short_name, name) VALUES (1, 'BM', 'Bahasa Melayu')"
+        )
+        conn.execute(
+            "INSERT INTO timetable_versions (id, academic_year_id, session_id, version_number, version_name) "
+            "VALUES (1, 1, 1, 1, 'Jadual Induk 2026')"
+        )
+        conn.execute(
+            "INSERT INTO timetable_lessons ("
+            "    id, timetable_version_id, academic_year_id, session_id, subject_id, "
+            "    assignment_type, lessons_per_week, periods_per_lesson"
+            ") VALUES (1, 1, 1, 1, 1, 'SINGLE', 1, 1)"
+        )
+        conn.execute(
+            "INSERT INTO timetable_lesson_targets ("
+            "    id, timetable_version_id, timetable_lesson_id, academic_year_id, session_id, class_id"
+            ") VALUES (1, 1, 1, 1, 1, 1)"
+        )
+        conn.execute(
+            "INSERT INTO timetable_lesson_teachers ("
+            "    id, timetable_version_id, timetable_lesson_id, academic_year_id, session_id, teacher_id, is_lead"
+            ") VALUES (1, 1, 1, 1, 1, 1, 1)"
+        )
+        conn.execute(
+            "INSERT INTO timetable_entries ("
+            "    id, timetable_version_id, timetable_lesson_id, day_of_week, start_minute, end_minute"
+            ") VALUES (1, 1, 1, 1, 480, 510)"
+        )
+
+    v3_manager = DatabaseManager(db_path)
+    upgrade_result = v3_manager.initialize()
+
+    assert upgrade_result.initial_version == 2
+    assert upgrade_result.final_version == 3
+    assert upgrade_result.applied_versions == (3,)
+    assert v3_manager.get_schema_version() == 3
+
+    with v3_manager.connection() as conn:
+        tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+        custom_indexes = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+        triggers = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+        ).fetchall()
+        classes_cols = {
+            row["name"]: row for row in conn.execute("PRAGMA table_info(classes)").fetchall()
+        }
+        classes_rows = conn.execute(
+            "SELECT id, academic_year_id, session_id, education_level_id, short_name, name, "
+            "student_count, home_room_id, is_active, class_teacher_id "
+            "FROM classes ORDER BY id"
+        ).fetchall()
+        teacher_rows = conn.execute(
+            "SELECT id, short_name, full_name FROM teachers ORDER BY id"
+        ).fetchall()
+        version_row = conn.execute(
+            "SELECT version_name FROM timetable_versions WHERE id = 1"
+        ).fetchone()
+        entry_row = conn.execute(
+            "SELECT timetable_lesson_id, day_of_week, start_minute, end_minute "
+            "FROM timetable_entries WHERE id = 1"
+        ).fetchone()
+        target_row = conn.execute(
+            "SELECT class_id FROM timetable_lesson_targets WHERE id = 1"
+        ).fetchone()
+        lesson_teacher_row = conn.execute(
+            "SELECT teacher_id FROM timetable_lesson_teachers WHERE id = 1"
+        ).fetchone()
+        fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        integrity_rows = conn.execute("PRAGMA integrity_check").fetchall()
+
+    assert len(tables) == 44
+    assert len(custom_indexes) == 45
+    assert len(triggers) == 64
+    assert "class_teacher_id" in classes_cols
+    assert classes_cols["class_teacher_id"]["notnull"] == 0
+    assert [
+        (
+            r["id"],
+            r["academic_year_id"],
+            r["session_id"],
+            r["education_level_id"],
+            r["short_name"],
+            r["name"],
+            r["student_count"],
+            r["home_room_id"],
+            r["is_active"],
+            r["class_teacher_id"],
+        )
+        for r in classes_rows
+    ] == [
+        (1, 1, 1, 1, "1A", "1 Amanah", 32, 1, 1, None),
+        (2, 1, 1, 1, "1B", "1 Bestari", 28, None, 0, None),
+    ]
+    assert [(r["id"], r["short_name"], r["full_name"]) for r in teacher_rows] == [
+        (1, "CG A", "Ahmad bin Ali"),
+        (2, "CG B", "Siti binti Hassan"),
+    ]
+    assert version_row is not None
+    assert version_row["version_name"] == "Jadual Induk 2026"
+    assert entry_row is not None
+    assert (
+        entry_row["timetable_lesson_id"],
+        entry_row["day_of_week"],
+        entry_row["start_minute"],
+        entry_row["end_minute"],
+    ) == (1, 1, 480, 510)
+    assert target_row is not None and target_row["class_id"] == 1
+    assert lesson_teacher_row is not None and lesson_teacher_row["teacher_id"] == 1
+    assert fk_violations == []
+    assert [tuple(row) for row in integrity_rows] == [("ok",)]
+
+    # Re-running initialize() on v3 must be a no-op.
+    repeat_result = v3_manager.initialize()
+    assert repeat_result.initial_version == 3
+    assert repeat_result.final_version == 3
+    assert repeat_result.applied_versions == ()
+
+
+def test_v3_classes_class_teacher_id_foreign_key_and_on_delete_restrict(tmp_path: Path) -> None:
+    db_path = tmp_path / "classes_fk_v3.db"
+    manager = DatabaseManager(db_path)
+    manager.initialize()
+
+    with manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO academic_years (id, year_code, name, start_date, end_date) "
+            "VALUES (1, '2026', 'Tahun 2026', '2026-01-01', '2026-12-31')"
+        )
+        conn.execute(
+            "INSERT INTO school_sessions (id, academic_year_id, session_code, name, sort_order) "
+            "VALUES (1, 1, 'PAGI', 'Sesi Pagi', 1)"
+        )
+        conn.execute(
+            "INSERT INTO education_levels (id, academic_year_id, session_id, level_code, name, sort_order) "
+            "VALUES (1, 1, 1, 'T1', 'Tingkatan 1', 1)"
+        )
+        conn.execute(
+            "INSERT INTO teachers (id, short_name, full_name) VALUES "
+            "(1, 'CG A', 'Ahmad bin Ali'), "
+            "(2, 'CG B', 'Siti binti Hassan')"
+        )
+        # NULL class_teacher_id is permitted.
+        conn.execute(
+            "INSERT INTO classes (id, academic_year_id, session_id, education_level_id, short_name, name, class_teacher_id) "
+            "VALUES (1, 1, 1, 1, '1A', '1 Amanah', NULL)"
+        )
+        # Valid teacher reference is permitted.
+        conn.execute(
+            "INSERT INTO classes (id, academic_year_id, session_id, education_level_id, short_name, name, class_teacher_id) "
+            "VALUES (2, 1, 1, 1, '1B', '1 Bestari', 1)"
+        )
+        # Updating to another valid teacher succeeds.
+        conn.execute("UPDATE classes SET class_teacher_id = 2 WHERE id = 1")
+
+    # Invalid teacher reference on INSERT or UPDATE must be rejected.
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"), manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO classes (id, academic_year_id, session_id, education_level_id, short_name, name, class_teacher_id) "
+            "VALUES (3, 1, 1, 1, '1C', '1 Cekal', 999)"
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"), manager.transaction() as conn:
+        conn.execute("UPDATE classes SET class_teacher_id = 999 WHERE id = 1")
+
+    # ON DELETE RESTRICT blocks deleting a teacher still referenced as Guru Kelas.
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"), manager.transaction() as conn:
+        conn.execute("DELETE FROM teachers WHERE id = 2")
+
+    # Clearing class_teacher_id back to NULL allows deleting the teacher cleanly.
+    with manager.transaction() as conn:
+        conn.execute("UPDATE classes SET class_teacher_id = NULL WHERE id = 1")
+        conn.execute("DELETE FROM teachers WHERE id = 2")
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert [tuple(r) for r in conn.execute("PRAGMA integrity_check").fetchall()] == [("ok",)]
+
+
+def test_failed_v3_migration_rolls_back_and_preserves_v2(tmp_path: Path) -> None:
+    from tavio.database.schema_v3 import MIGRATION_V3_SQL
+
+    db_path = tmp_path / "failed_v3.db"
+    v2_manager = DatabaseManager(db_path, migrations=DEFAULT_MIGRATIONS[:2])
+    v2_manager.initialize()
+
+    with v2_manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO academic_years (id, year_code, name, start_date, end_date) "
+            "VALUES (1, '2026', 'Tahun 2026', '2026-01-01', '2026-12-31')"
+        )
+        conn.execute(
+            "INSERT INTO school_sessions (id, academic_year_id, session_code, name, sort_order) "
+            "VALUES (1, 1, 'PAGI', 'Sesi Pagi', 1)"
+        )
+        conn.execute(
+            "INSERT INTO education_levels (id, academic_year_id, session_id, level_code, name, sort_order) "
+            "VALUES (1, 1, 1, 'T1', 'Tingkatan 1', 1)"
+        )
+        conn.execute(
+            "INSERT INTO classes (id, academic_year_id, session_id, education_level_id, short_name, name) "
+            "VALUES (1, 1, 1, 1, '1A', '1 Amanah')"
+        )
+
+    broken_v3_migrations = (
+        *DEFAULT_MIGRATIONS[:2],
+        Migration(
+            version=3,
+            description="Broken v3 after ALTER TABLE classes",
+            sql=f"{MIGRATION_V3_SQL}\nINSERT INTO non_existent_v3_table (id) VALUES (1);",
+        ),
+    )
+    failing_v3_manager = DatabaseManager(db_path, migrations=broken_v3_migrations)
+
+    with pytest.raises(DatabaseMigrationError, match="v3"):
+        failing_v3_manager.initialize()
+
+    assert failing_v3_manager.get_schema_version() == 2
+    with failing_v3_manager.connection() as conn:
+        class_cols = {row["name"] for row in conn.execute("PRAGMA table_info(classes)").fetchall()}
+        class_row = conn.execute("SELECT short_name, name FROM classes WHERE id = 1").fetchone()
+        fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        integrity_rows = conn.execute("PRAGMA integrity_check").fetchall()
+
+    assert "class_teacher_id" not in class_cols
+    assert class_row is not None
+    assert (class_row["short_name"], class_row["name"]) == ("1A", "1 Amanah")
+    assert fk_violations == []
+    assert [tuple(r) for r in integrity_rows] == [("ok",)]
 
 
 def test_database_package_has_no_ui_or_pyside_dependencies() -> None:

@@ -13,6 +13,7 @@ from tavio.database.exceptions import (
 )
 from tavio.database.schema_v1 import MIGRATION_V1_SQL
 from tavio.database.schema_v2 import MIGRATION_V2_SQL
+from tavio.database.schema_v3 import MIGRATION_V3_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,14 @@ DEFAULT_MIGRATIONS: tuple[Migration, ...] = (
             "schedule_signatory_settings, and principal_name backfill (v1.3.4)"
         ),
         sql=MIGRATION_V2_SQL,
+    ),
+    Migration(
+        version=3,
+        description=(
+            "Add nullable classes.class_teacher_id foreign key referencing "
+            "teachers(id) with ON DELETE RESTRICT"
+        ),
+        sql=MIGRATION_V3_SQL,
     ),
 )
 

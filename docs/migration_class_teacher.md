@@ -1,8 +1,8 @@
-# Cadangan Migration v3 — Penetapan Guru Kelas
+# Migration v3 — Penetapan Guru Kelas
 
-**Status:** Draf untuk semakan dan kelulusan  
-**Skop:** Menyimpan seorang Guru Kelas bagi setiap rekod kelas  
-**Penting:** Dokumen ini ialah cadangan sahaja. Tiada perubahan skema, migration, kod aplikasi atau data dibuat.
+**Status:** Perubahan kod Migration v3 dan ujian automatik telah disediakan; menunggu pengesahan ujian manual  
+**Skop:** Menyimpan seorang Guru Kelas bagi setiap rekod kelas pada peringkat skema database  
+**Penting:** Hanya perubahan skema database (Migration v3) dan ujian berkaitannya telah dilaksanakan dalam pusingan ini. UI dan fungsi pengurusan Guru Kelas pada lapisan aplikasi belum dibangunkan.
 
 ## 1. Latar belakang
 
@@ -66,13 +66,20 @@ FOREIGN KEY (class_teacher_id)
 
 ## 5. Strategi migration dan risiko SQLite
 
-Penambahan medan nullable dengan foreign key pada SQLite perlu disahkan terhadap versi SQLite yang digunakan dan cara migration semasa dilaksanakan.
+Pendekatan yang dipilih dan dilaksanakan untuk Migration v3 ialah **tambah medan dengan `ALTER TABLE`**, bukannya rebuild jadual `classes`:
 
-Dua pendekatan perlu dibandingkan sebelum pelaksanaan:
-- **Tambah medan dengan ALTER TABLE:** hanya diterima jika kekangan foreign key yang diperlukan boleh ditambah dengan selamat dan disokong oleh versi SQLite aplikasi.
-- **Rebuild jadual classes:** bina semula jadual dengan definisi lengkap, salin semua data, indeks dan kekangan, kemudian sahkan foreign key. Ini lebih kompleks dan berisiko, jadi tidak boleh dipilih tanpa audit skrip schema penuh, indeks, trigger, migration runner dan ujian pemulihan.
+```sql
+ALTER TABLE classes
+ADD COLUMN class_teacher_id INTEGER
+REFERENCES teachers(id) ON DELETE RESTRICT;
+```
 
-Tiada pendekatan migration dipilih dalam draf ini. Pelaksana mesti mengesahkan versi SQLite sebenar dan menguji migration pada salinan database v2 yang mengandungi data contoh serta data kelas sedia ada.
+Rasional pemilihan pendekatan ini:
+- Kolum `class_teacher_id` bersifat nullable tanpa kekangan `NOT NULL` dan tanpa nilai `DEFAULT` bukan `NULL`, maka SQLite menyokong `ALTER TABLE ... ADD COLUMN ... REFERENCES ... ON DELETE RESTRICT` secara terus dan selamat.
+- Semua rekod `classes` sedia ada mengekalkan keseluruhan data asal dan menerima `class_teacher_id = NULL` tanpa sebarang auto-assignment.
+- Semua indeks, trigger dan kekangan sedia ada pada jadual `classes` serta jadual lain yang merujuk `classes` kekal utuh tanpa risiko kerosakan akibat rebuild jadual.
+
+Implementasi skema diletakkan dalam `tavio/src/tavio/database/schema_v3.py` dan didaftarkan sebagai Migration v3 dalam `DEFAULT_MIGRATIONS` (`tavio/src/tavio/database/migrations.py`) untuk menaik taraf `PRAGMA user_version` kepada `3`.
 
 ## 6. Pelan ujian yang diperlukan
 
@@ -121,4 +128,6 @@ Sila semak dan sahkan perkara berikut:
 4. Guru yang dinyahaktifkan mengekalkan penetapan sedia ada tetapi menghalang preview/cetakan sehingga diganti.
 5. Tiada jadual, indeks atau trigger baharu dalam skop cadangan asas.
 
-**Status pelaksanaan:** Belum diluluskan dan belum dilaksanakan.
+**Status pelaksanaan:**
+- **Skema Database (Migration v3):** Perubahan kod telah disediakan (`tavio/src/tavio/database/schema_v3.py`, `tavio/src/tavio/database/migrations.py`) berserta ujian automatik dalam `tavio/tests/test_database.py`, dan **belum disahkan** melalui pelaksanaan `pytest` / Ruff (menunggu semakan dan ujian manual).
+- **UI & Pengurusan Guru Kelas (lapisan aplikasi & laporan PDF):** **Belum dibangunkan** dalam tugasan ini (termasuk pengesahan keahlian `teacher_sessions`, pemilihan Guru Kelas pada Master Data Kelas, dan sekatan preview/cetakan Jadual Waktu Kelas).
