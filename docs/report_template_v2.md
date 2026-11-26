@@ -276,7 +276,7 @@ Ruang tandatangan wujud pada:
 
 ### 12.5 Perkara yang belum dimuktamadkan
 
-Cara input tarikh tandatangan (date picker atau input lain), serta sama ada satu tarikh yang sama digunakan untuk semua rekod dalam satu fail PDF atau tarikh boleh ditetapkan secara berasingan bagi setiap rekod, belum diputuskan. Jangan membuat andaian sehingga perkara ini diputuskan.
+Satu tarikh tandatangan yang dipilih pengguna digunakan secara seragam untuk semua rekod/halaman dalam satu fail PDF. Pengguna menetapkan tarikh tersebut sebelum Preview PDF. Cara input tarikh (date picker atau input lain) belum diputuskan.
 
 ## 13. Pemilihan versi jadual waktu dan tarikh kuat kuasa
 
