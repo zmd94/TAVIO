@@ -14,6 +14,7 @@ from tavio.database.exceptions import (
     DatabaseError,
     DatabaseMigrationError,
     DatabaseTransactionError,
+    InvalidSignatoryAdministratorError,
     UnsupportedDatabaseVersionError,
 )
 from tavio.database.manager import DatabaseManager
@@ -26,6 +27,7 @@ from tavio.database.migrations import (
     split_sql_statements,
     validate_migrations,
 )
+from tavio.database.schedule_signatory_repository import ScheduleSignatoryRepository
 from tavio.database.school_administrator_repository import SchoolAdministratorRepository
 from tavio.database.school_profile_repository import SchoolProfileRepository
 
@@ -39,8 +41,10 @@ __all__ = [
     "DatabaseManager",
     "DatabaseMigrationError",
     "DatabaseTransactionError",
+    "InvalidSignatoryAdministratorError",
     "Migration",
     "MigrationResult",
+    "ScheduleSignatoryRepository",
     "SchoolAdministratorRepository",
     "SchoolProfileRepository",
     "UnsupportedDatabaseVersionError",

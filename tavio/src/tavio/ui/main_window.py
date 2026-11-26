@@ -27,13 +27,16 @@ from tavio import __version__
 from tavio.config import APP_FULL_NAME, APP_NAME, AppPaths, get_asset_path
 from tavio.database import (
     DatabaseManager,
+    ScheduleSignatoryRepository,
     SchoolAdministratorRepository,
     SchoolProfileRepository,
 )
+from tavio.services.schedule_signatory_service import ScheduleSignatoryService
 from tavio.services.school_administrator_service import SchoolAdministratorService
 from tavio.services.school_logo_service import SchoolLogoService
 from tavio.services.school_profile_service import SchoolProfileService
 from tavio.services.startup_service import StartupDiagnosticReport, StartupService
+from tavio.ui.schedule_signatories_page import ScheduleSignatoriesPage
 from tavio.ui.school_administrators_page import SchoolAdministratorsPage
 from tavio.ui.school_profile_page import SchoolProfilePage
 
@@ -69,8 +72,13 @@ class MainWindow(QMainWindow):
             logo_service=SchoolLogoService(),
             paths=paths,
         )
+        admin_repository = SchoolAdministratorRepository(database_manager)
         self._school_administrator_service = SchoolAdministratorService(
-            repository=SchoolAdministratorRepository(database_manager),
+            repository=admin_repository,
+        )
+        self._schedule_signatory_service = ScheduleSignatoryService(
+            signatory_repository=ScheduleSignatoryRepository(database_manager),
+            administrator_repository=admin_repository,
         )
 
         self.setWindowTitle(f"{APP_NAME} — {APP_FULL_NAME}")
@@ -94,11 +102,15 @@ class MainWindow(QMainWindow):
             self._school_administrator_service,
             auto_load=False,
         )
+        self._schedule_signatories_page = ScheduleSignatoriesPage(
+            self._schedule_signatory_service,
+            auto_load=False,
+        )
 
         self._build_ui()
         self._populate_diagnostics(report)
         self.statusBar().showMessage(
-            f"{APP_NAME} v{__version__} — Phase 1 School Profile & Administrators Ready"
+            f"{APP_NAME} v{__version__} — Phase 1 School Profile, Administrators & Signatories Ready"
         )
 
     @property
@@ -155,6 +167,7 @@ class MainWindow(QMainWindow):
         self._nav_list.addItem(QListWidgetItem("System Overview (Phase 0)"))
         self._nav_list.addItem(QListWidgetItem("School Profile (Phase 1)"))
         self._nav_list.addItem(QListWidgetItem("School Administrators (Phase 1)"))
+        self._nav_list.addItem(QListWidgetItem("Schedule Signatories (Phase 1)"))
         for title, _desc in FUTURE_NAVIGATION_MODULES:
             self._nav_list.addItem(QListWidgetItem(title))
 
@@ -167,6 +180,7 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._build_overview_page())
         self._stack.addWidget(self._school_profile_page)
         self._stack.addWidget(self._school_administrators_page)
+        self._stack.addWidget(self._schedule_signatories_page)
         for title, description in FUTURE_NAVIGATION_MODULES:
             self._stack.addWidget(self._build_future_phase_page(title, description))
 
@@ -286,6 +300,8 @@ class MainWindow(QMainWindow):
             self._school_profile_page.reload()
         elif row_index == 2:
             self._school_administrators_page.reload()
+        elif row_index == 3:
+            self._schedule_signatories_page.reload()
 
     def _on_rerun_solver(self) -> None:
         try:

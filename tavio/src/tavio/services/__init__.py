@@ -1,5 +1,10 @@
 """Application services package for TAVIO."""
 
+from tavio.services.schedule_signatory_service import (
+    ScheduleSignatoriesOverview,
+    ScheduleSignatoryService,
+    ScheduleSignatoryValidationError,
+)
 from tavio.services.school_administrator_service import (
     SchoolAdministratorService,
     SchoolAdministratorValidationError,
@@ -31,6 +36,9 @@ __all__ = [
     "MAX_LOGO_FILE_SIZE_BYTES",
     "MIN_LOGO_DIMENSION",
     "ProcessedLogoInfo",
+    "ScheduleSignatoriesOverview",
+    "ScheduleSignatoryService",
+    "ScheduleSignatoryValidationError",
     "SchoolAdministratorService",
     "SchoolAdministratorValidationError",
     "SchoolLogoError",

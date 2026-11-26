@@ -29,3 +29,7 @@ class AdministratorNotFoundError(DatabaseError):
 
 class AdministratorInUseError(DatabaseError):
     """Raised when deleting an administrator is blocked by ON DELETE RESTRICT foreign keys."""
+
+
+class InvalidSignatoryAdministratorError(DatabaseError):
+    """Raised when a signatory administrator reference violates foreign key integrity."""
