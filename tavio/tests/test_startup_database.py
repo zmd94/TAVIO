@@ -518,7 +518,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         )
         assert window._sidebar_toggle_button.toolTip() == "Expand sidebar"
         assert not window._sidebar_toggle_button.icon().isNull()
-        assert window._nav_list.topLevelItem(0).text(0) == "Dashboard"
+        assert window._nav_list.topLevelItem(0).text(0) == ""
         assert all(
             not window._nav_list.topLevelItem(index).isExpanded()
             for index in range(window._nav_list.topLevelItemCount())
