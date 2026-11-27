@@ -262,7 +262,6 @@ class MainWindow(QMainWindow):
                     page = self._build_placeholder_page(child_phase, scope)
                 self._page_indexes[route] = self._stack.addWidget(page)
 
-        self._nav_list.topLevelItem(2).setExpanded(True)
         root_layout.addWidget(sidebar)
         root_layout.addWidget(self._stack, 1)
         self.setCentralWidget(root)
@@ -357,13 +356,13 @@ class MainWindow(QMainWindow):
             )
         )
 
-        if kind == "school":
-            painter.drawLine(2, 7, 10, 2)
-            painter.drawLine(10, 2, 18, 7)
-            painter.drawRect(4, 7, 12, 10)
-            painter.drawRect(8, 12, 4, 5)
-            painter.drawRect(6, 9, 2, 2)
-            painter.drawRect(12, 9, 2, 2)
+        if kind == "home":
+            painter.drawLine(2, 9, 10, 2)
+            painter.drawLine(10, 2, 18, 9)
+            painter.drawLine(4, 8, 4, 18)
+            painter.drawLine(16, 8, 16, 18)
+            painter.drawLine(4, 18, 16, 18)
+            painter.drawRect(8, 12, 4, 6)
         elif kind == "person":
             painter.drawEllipse(7, 2, 6, 6)
             painter.drawArc(3, 9, 14, 11, 0, 180 * 16)
