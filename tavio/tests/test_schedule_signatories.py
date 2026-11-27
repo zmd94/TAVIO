@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from tavio.config import AppPaths, build_app_paths, ensure_app_directories
@@ -480,8 +481,14 @@ def test_main_window_navigates_to_schedule_signatories_and_reloads(
         database_manager=db_manager,
     )
     try:
-        assert window._nav_list.item(3).text() == "Schedule Signatories (Phase 1)"
-        window._nav_list.setCurrentRow(3)
+        school_setup_item = window._nav_list.topLevelItem(1)
+        assert school_setup_item.text(0) == "School Setup"
+        signatories_item = school_setup_item.child(2)
+        assert signatories_item.text(0) == "Schedule Signatories"
+        assert (
+            signatories_item.data(0, Qt.ItemDataRole.UserRole) == "schedule_signatories"
+        )
+        window._nav_list.setCurrentItem(signatories_item)
         assert window._stack.currentWidget() is window._schedule_signatories_page
         assert window._schedule_signatories_page.current_label_language() == SIGNATORY_LANGUAGE_MALAY
         class_card = window._schedule_signatories_page._cards[SCHEDULE_TYPE_CLASS]
