@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from tavio import __version__
-from tavio.config import APP_FULL_NAME, APP_NAME, AppPaths, get_asset_path
+from tavio.config import APP_NAME, AppPaths, get_asset_path
 from tavio.database import (
     DatabaseManager,
     ScheduleSignatoryRepository,
@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
             administrator_repository=admin_repository,
         )
 
-        self.setWindowTitle(f"{APP_NAME} — {APP_FULL_NAME}")
+        self.setWindowTitle(f"{APP_NAME} - TimeTable1")
         self.setMinimumSize(1020, 660)
 
         icon_path = get_asset_path("TAVIO_icon.png")
@@ -176,14 +176,11 @@ class MainWindow(QMainWindow):
         brand_text = QVBoxLayout(brand_text_widget)
         brand_text.setContentsMargins(0, 0, 0, 0)
         brand_text.setSpacing(2)
-        brand_label = QLabel(APP_NAME)
-        brand_label.setObjectName("BrandTitle")
         subtitle_label = QLabel(
             "Timetable Administration &\nValidation Intelligent Organizer"
         )
         subtitle_label.setObjectName("BrandSubtitle")
         subtitle_label.setWordWrap(True)
-        brand_text.addWidget(brand_label)
         brand_text.addWidget(subtitle_label)
 
         brand_row.addWidget(brand_icon, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -332,15 +329,13 @@ class MainWindow(QMainWindow):
         route = item.data(0, Qt.ItemDataRole.UserRole)
         title = item.text(0)
         if title == "School Setup":
-            item.setIcon(0, self._create_semantic_navigation_icon("school"))
+            item.setIcon(0, self._create_semantic_navigation_icon("home"))
         elif title == "Settings":
-            item.setIcon(0, self._create_semantic_navigation_icon("wrench"))
+            item.setIcon(0, self._create_semantic_navigation_icon("sliders"))
         elif title == "Reports":
             item.setIcon(0, self._create_semantic_navigation_icon("printer"))
         elif route == "master_teachers":
             item.setIcon(0, self._create_semantic_navigation_icon("person"))
-        elif route == "workspace_save_as":
-            item.setIcon(0, self._create_colored_save_icon())
         elif route == "workspace_exit":
             item.setIcon(0, self._create_colored_exit_icon())
         else:
@@ -389,34 +384,14 @@ class MainWindow(QMainWindow):
             painter.drawRect(5, 12, 10, 7)
             painter.drawLine(7, 15, 13, 15)
             painter.drawLine(7, 17, 13, 17)
-        elif kind == "wrench":
-            painter.drawArc(2, 1, 12, 12, 35 * 16, 250 * 16)
-            painter.drawLine(10, 10, 17, 17)
-            painter.drawLine(14, 14, 18, 10)
-            painter.drawLine(17, 17, 13, 19)
+        elif kind == "sliders":
+            painter.drawLine(2, 5, 18, 5)
+            painter.drawLine(2, 10, 18, 10)
+            painter.drawLine(2, 15, 18, 15)
+            painter.drawEllipse(6, 2, 6, 6)
+            painter.drawEllipse(12, 7, 6, 6)
+            painter.drawEllipse(4, 12, 6, 6)
 
-        painter.end()
-        return QIcon(pixmap)
-
-    def _create_colored_save_icon(self) -> QIcon:
-        """Create a green Save As floppy-disk icon distinct from regular Save."""
-        pixmap = QPixmap(20, 20)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(
-            QPen(
-                QColor("#55c58a"),
-                1.8,
-                Qt.PenStyle.SolidLine,
-                Qt.PenCapStyle.RoundCap,
-                Qt.PenJoinStyle.RoundJoin,
-            )
-        )
-        painter.drawRect(2, 2, 16, 16)
-        painter.drawRect(5, 2, 8, 5)
-        painter.drawRect(5, 11, 10, 7)
-        painter.drawLine(7, 14, 13, 14)
         painter.end()
         return QIcon(pixmap)
 
