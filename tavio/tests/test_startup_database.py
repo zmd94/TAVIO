@@ -478,7 +478,18 @@ def test_main_window_receives_database_manager_and_preserves_ui(
             for index in range(window._nav_list.topLevelItemCount())
         )
         assert window._nav_list.iconSize().width() == 26
-        assert not hasattr(window, "eventFilter") or "eventFilter" not in type(window).__dict__
+        assert "eventFilter" not in type(window).__dict__
+        assert all(
+            not window._nav_list.topLevelItem(index).toolTip(0)
+            for index in range(window._nav_list.topLevelItemCount())
+        )
+        assert all(
+            not window._nav_list.topLevelItem(index).child(child_index).toolTip(0)
+            for index in range(window._nav_list.topLevelItemCount())
+            for child_index in range(
+                window._nav_list.topLevelItem(index).childCount()
+            )
+        )
         assert all(
             window._nav_list.topLevelItem(index).textAlignment(0)
             == Qt.AlignmentFlag.AlignCenter
