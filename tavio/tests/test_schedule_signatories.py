@@ -483,7 +483,7 @@ def test_main_window_navigates_to_schedule_signatories_and_reloads(
     try:
         school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
-        signatories_item = school_setup_item.child(2)
+        signatories_item = school_setup_item.child(5)
         assert signatories_item.text(0) == "Schedule Signatories"
         assert (
             signatories_item.data(0, Qt.ItemDataRole.UserRole) == "schedule_signatories"
