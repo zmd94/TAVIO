@@ -388,6 +388,32 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         school_setup_item = window._nav_list.topLevelItem(1)
         assert school_setup_item.text(0) == "School Setup"
         assert school_setup_item.childCount() == 3
+        assert not window._nav_list.topLevelItem(0).icon(0).isNull()
+        assert not school_setup_item.icon(0).isNull()
+        assert all(
+            not school_setup_item.child(index).icon(0).isNull()
+            for index in range(school_setup_item.childCount())
+        )
+
+        assert window._nav_list.isExpanded(school_setup_item)
+        window._on_navigation_item_clicked(school_setup_item, 0)
+        assert not window._nav_list.isExpanded(school_setup_item)
+        window._on_navigation_item_clicked(school_setup_item, 0)
+        assert window._nav_list.isExpanded(school_setup_item)
+
+        assert window._sidebar is not None
+        assert window._sidebar.width() == 250
+        assert window._sidebar_toggle_button is not None
+        window._sidebar_toggle_button.click()
+        assert window._sidebar_collapsed is True
+        assert window._sidebar.width() == 84
+        assert window._sidebar_toggle_button.toolTip() == "Expand sidebar"
+        assert window._nav_list.topLevelItem(0).text(0) == "System Overview (Phase 0)"
+
+        window._sidebar_toggle_button.click()
+        assert window._sidebar_collapsed is False
+        assert window._sidebar.width() == 250
+        assert window._sidebar_toggle_button.toolTip() == "Minimize sidebar"
         assert window._stack.count() == 4 + len(FUTURE_NAVIGATION_MODULES)
         assert window._dep_table.rowCount() == len(initial_report.dependencies)
         assert window._solver_summary_label.text() == initial_report.solver_result.format_summary()
