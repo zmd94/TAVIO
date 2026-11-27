@@ -416,7 +416,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
             QLabel
         )
         assert [label.text() for label in dashboard_labels] == [
-            "Not yet implement (Phase 1).",
+            "Not yet implement (Phase 1)",
             "Planned scope: School workspace dashboard, academic year and session context, "
             "summary cards, workspace readiness, timetable status, and quick actions.",
         ]
@@ -424,9 +424,11 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         about_item = settings_item.child(2)
         assert about_item.text(0) == "About TAVIO"
         window._nav_list.setCurrentItem(about_item)
-        assert window._stack.currentWidget() is window._stack.widget(
-            window._page_indexes["about_tavio"]
-        )
+        about_page = window._stack.widget(window._page_indexes["about_tavio"])
+        assert window._stack.currentWidget() is about_page
+        about_heading = about_page.findChild(QLabel, "PageTitle")
+        assert about_heading is not None
+        assert about_heading.text() == "About TAVIO — Environment & Packaging Verification"
         window._nav_list.setCurrentItem(dashboard_item)
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is True
