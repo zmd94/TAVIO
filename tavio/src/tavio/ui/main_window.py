@@ -147,8 +147,8 @@ class MainWindow(QMainWindow):
         sidebar.resize(340, self.height())
         sidebar_layout = QVBoxLayout(sidebar)
         self._sidebar_layout = sidebar_layout
-        sidebar_layout.setContentsMargins(14, 18, 14, 18)
-        sidebar_layout.setSpacing(12)
+        sidebar_layout.setContentsMargins(14, 10, 14, 18)
+        sidebar_layout.setSpacing(2)
 
         brand_row = QHBoxLayout()
         self._brand_row = brand_row
@@ -464,9 +464,9 @@ class MainWindow(QMainWindow):
             self._sidebar.resize(340, self._sidebar.height())
         self._sidebar_layout.setContentsMargins(
             6 if collapsed else 14,
-            8 if collapsed else 18,
+            6 if collapsed else 10,
             6 if collapsed else 14,
-            8 if collapsed else 18,
+            6 if collapsed else 18,
         )
         self._brand_row.setSpacing(0)
         self._nav_list.setIndentation(0 if collapsed else 16)
