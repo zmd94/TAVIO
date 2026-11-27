@@ -443,7 +443,7 @@ class MainWindow(QMainWindow):
         """Expand or collapse a navigation group when its parent is clicked."""
         route = item.data(0, Qt.ItemDataRole.UserRole)
         if route is None and item.childCount() > 0:
-            self._nav_list.setExpanded(item, not self._nav_list.isExpanded(item))
+            item.setExpanded(not item.isExpanded())
 
     def _on_rerun_solver(self) -> None:
         try:
