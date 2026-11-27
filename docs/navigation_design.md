@@ -39,11 +39,11 @@ The agreed navigation direction is a set of main modules with relevant submenus.
 - Main landing page after a workspace has been opened successfully.
 
 ### 3.2 Workspace
-- NEW TIMETABLE
-- OPEN AS
-- SAVE
-- SAVE AS
-- EXIT
+- New Timetable
+- Open
+- Save
+- Save As
+- Exit
 
 Workspace actions manage the active workspace and its file lifecycle. They are not master-data pages.
 
@@ -55,10 +55,10 @@ Workspace actions manage the active workspace and its file lifecycle. They are n
 ### 3.4 Master Data
 - Teachers
 - Classes
+- Class Teacher
 - Subjects
 - Special Rooms
-- Teacher Assignments
-- Class Teacher Assignments
+- Teaching Distribution
 
 ### 3.5 Timetable
 - Generate Timetable
@@ -80,7 +80,7 @@ Workspace actions manage the active workspace and its file lifecycle. They are n
 - Report Settings
 
 ### 3.9 Settings
-- Application Settings
+- General
 - Appearance
 - About TAVIO
 
