@@ -196,7 +196,6 @@ class MainWindow(QMainWindow):
             dashboard_item,
             QStyle.StandardPixmap.SP_ComputerIcon,
         )
-        dashboard_item.setToolTip(0, "Dashboard")
         dashboard_item.setData(0, Qt.ItemDataRole.UserRole, "dashboard")
         self._nav_list.addTopLevelItem(dashboard_item)
         dashboard_item.setHidden(True)
@@ -219,13 +218,11 @@ class MainWindow(QMainWindow):
                 group_item,
                 self._navigation_group_icon(group_title),
             )
-            group_item.setToolTip(0, group_title)
             group_item.setData(0, Qt.ItemDataRole.UserRole, None)
             self._nav_list.addTopLevelItem(group_item)
 
             for child_title, route, scope in children:
                 child = QTreeWidgetItem([child_title])
-                child.setToolTip(0, child_title)
                 child.setData(0, Qt.ItemDataRole.UserRole, route)
                 self._set_navigation_item_icon(
                     child,
