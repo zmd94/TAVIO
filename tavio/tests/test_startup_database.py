@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 from tavio import main as tavio_main
 from tavio.config import AppPaths, build_app_paths
@@ -413,12 +413,12 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._nav_list.indentation() == 0
         assert window._stack.count() == 1 + sum(len(group[3]) for group in NAVIGATION_GROUPS)
         dashboard_labels = window._stack.widget(window._page_indexes["dashboard"]).findChildren(
-            __import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel
+            QLabel
         )
         assert [label.text() for label in dashboard_labels] == [
             "Not yet implement (Phase 1).",
             "Planned scope: School workspace dashboard, academic year and session context, "
-            " "summary cards, workspace readiness, timetable status, and quick actions.",
+            "summary cards, workspace readiness, timetable status, and quick actions.",
         ]
         settings_item = window._nav_list.topLevelItem(8)
         about_item = settings_item.child(2)
