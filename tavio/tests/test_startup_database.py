@@ -419,13 +419,8 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._sidebar_toggle_button.text() == ""
         assert not window._sidebar_toggle_button.icon().isNull()
         brand_title = window._brand_text_widget.findChild(QLabel, "BrandTitle")
-        brand_subtitle = window._brand_text_widget.findChild(QLabel, "BrandSubtitle")
         assert brand_title is None
-        assert brand_subtitle is not None
-        assert brand_subtitle.text() == (
-            "Timetable Administration &\nValidation Intelligent Organizer"
-        )
-        assert brand_subtitle.wordWrap()
+        assert window._brand_text_widget is None
         file_item = window._nav_list.topLevelItem(1)
         assert file_item.text(0) == "File"
         save_as_item = file_item.child(3)
@@ -455,7 +450,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         ]
         settings_item = window._nav_list.topLevelItem(8)
         about_item = settings_item.child(2)
-        assert about_item.text(0) == "About TAVIO"
+        assert about_item.text(0) == "About"
         window._nav_list.setCurrentItem(about_item)
         about_page = window._stack.widget(window._page_indexes["about_tavio"])
         assert window._stack.currentWidget() == about_page
@@ -467,8 +462,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._sidebar_collapsed is True
         assert window._sidebar.width() == 76
         assert window._brand_icon_label is None
-        assert window._brand_text_widget is not None
-        assert window._brand_text_widget.isHidden()
+        assert window._brand_text_widget is None
         assert window._nav_list.currentItem() is None
         assert not window._nav_list.hasFocus()
         assert all(
