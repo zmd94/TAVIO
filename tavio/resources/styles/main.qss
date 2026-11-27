@@ -22,6 +22,25 @@ QMainWindow {
     margin-bottom: 8px;
 }
 
+QPushButton#DashboardNavigationButton {
+    background-color: transparent;
+    color: #dbe6f5;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QPushButton#DashboardNavigationButton:hover {
+    background-color: #213556;
+}
+
+QPushButton#DashboardNavigationButton:pressed {
+    background-color: #1c3560;
+}
+
 #NavigationTree {
     background-color: transparent;
     border: none;
