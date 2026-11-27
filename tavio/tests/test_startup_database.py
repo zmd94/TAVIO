@@ -410,10 +410,25 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert school_setup_item.isExpanded()
 
         assert window._sidebar is not None
-        assert 286 <= window._sidebar.width() <= 340
+        assert 330 <= window._sidebar.width() <= 360
         assert window._sidebar_toggle_button is not None
         assert window._sidebar_toggle_button.text() == ""
         assert not window._sidebar_toggle_button.icon().isNull()
+        brand_title = window._brand_text_widget.findChild(QLabel, "BrandTitle")
+        brand_subtitle = window._brand_text_widget.findChild(QLabel, "BrandSubtitle")
+        assert brand_title is not None
+        assert brand_title.text() == "TAVIO"
+        assert brand_subtitle is not None
+        assert brand_subtitle.text() == (
+            "Timetable Administration &\\nValidation Intelligent Organizer"
+        )
+        assert brand_subtitle.wordWrap()
+        workspace_item = window._nav_list.topLevelItem(1)
+        exit_item = workspace_item.child(4)
+        assert exit_item.text(0) == "Exit"
+        assert not exit_item.icon(0).isNull()
+        assert not window._nav_list.topLevelItem(7).icon(0).isNull()
+        assert not window._nav_list.topLevelItem(8).icon(0).isNull()
         assert window._nav_list.rootIsDecorated() is False
         assert window._nav_list.indentation() == 16
         assert window._nav_list.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -446,6 +461,15 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._brand_text_widget.isHidden()
         assert window._nav_list.currentItem() is None
         assert not window._nav_list.hasFocus()
+        assert all(
+            window._nav_list.topLevelItem(index).text(0) == ""
+            for index in range(window._nav_list.topLevelItemCount())
+        )
+        assert all(
+            window._nav_list.topLevelItem(index).textAlignment(0)
+            == Qt.AlignmentFlag.AlignCenter
+            for index in range(window._nav_list.topLevelItemCount())
+        )
         assert window._sidebar_toggle_button.toolTip() == "Expand sidebar"
         assert not window._sidebar_toggle_button.icon().isNull()
         assert window._nav_list.topLevelItem(0).text(0) == "Dashboard"
@@ -469,8 +493,9 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         )
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is False
-        assert 286 <= window._sidebar.width() <= 340
+        assert 330 <= window._sidebar.width() <= 360
         assert window._sidebar_toggle_button.toolTip() == "Minimize sidebar"
+        assert window._nav_list.topLevelItem(1).text(0) == "Workspace"
         assert window._stack.count() == 1 + sum(len(group[3]) for group in NAVIGATION_GROUPS)
         assert window._dep_table.rowCount() == len(initial_report.dependencies)
         assert window._solver_summary_label.text() == initial_report.solver_result.format_summary()
