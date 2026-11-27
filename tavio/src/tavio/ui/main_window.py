@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
+    QTreeWidget,
+    QTreeWidgetItem,
     QMainWindow,
     QPushButton,
     QStackedWidget,
@@ -90,7 +90,8 @@ class MainWindow(QMainWindow):
         else:
             logger.warning("Window icon not found at %s.", icon_path)
 
-        self._nav_list = QListWidget()
+        self._nav_list = QTreeWidget()
+        self._page_indexes: dict[str, int] = {}
         self._stack = QStackedWidget()
         self._solver_summary_label = QLabel()
         self._dep_table = QTableWidget(0, 4)
@@ -163,32 +164,61 @@ class MainWindow(QMainWindow):
         brand_row.addWidget(brand_icon, 0, Qt.AlignmentFlag.AlignVCenter)
         brand_row.addLayout(brand_text, 1)
 
-        self._nav_list.setObjectName("NavigationList")
-        self._nav_list.addItem(QListWidgetItem("System Overview (Phase 0)"))
-        self._nav_list.addItem(QListWidgetItem("School Profile (Phase 1)"))
-        self._nav_list.addItem(QListWidgetItem("School Administrators (Phase 1)"))
-        self._nav_list.addItem(QListWidgetItem("Schedule Signatories (Phase 1)"))
-        for title, _desc in FUTURE_NAVIGATION_MODULES:
-            self._nav_list.addItem(QListWidgetItem(title))
+        self._nav_list.setObjectName("NavigationTree")
+        self._nav_list.setHeaderHidden(True)
+        self._nav_list.setRootIsDecorated(True)
+        self._nav_list.setItemsExpandable(True)
+        self._nav_list.setExpandsOnDoubleClick(False)
+        self._nav_list.setIndentation(18)
 
-        self._nav_list.currentRowChanged.connect(self._on_navigation_changed)
+        overview_item = QTreeWidgetItem(["System Overview (Phase 0)"])
+        overview_item.setData(0, Qt.ItemDataRole.UserRole, "overview")
+        self._nav_list.addTopLevelItem(overview_item)
+
+        school_setup_item = QTreeWidgetItem(["School Setup"])
+        school_setup_item.setData(0, Qt.ItemDataRole.UserRole, None)
+        self._nav_list.addTopLevelItem(school_setup_item)
+        for label, route in (
+            ("School Profile", "school_profile"),
+            ("School Administrators", "school_administrators"),
+            ("Schedule Signatories", "schedule_signatories"),
+        ):
+            child = QTreeWidgetItem([label])
+            child.setData(0, Qt.ItemDataRole.UserRole, route)
+            school_setup_item.addChild(child)
+
+        self._nav_list.currentItemChanged.connect(self._on_navigation_changed)
+        self._nav_list.itemClicked.connect(self._on_navigation_item_clicked)
 
         sidebar_layout.addLayout(brand_row)
         sidebar_layout.addWidget(self._nav_list, 1)
 
-        # Main content stack
-        self._stack.addWidget(self._build_overview_page())
-        self._stack.addWidget(self._school_profile_page)
-        self._stack.addWidget(self._school_administrators_page)
-        self._stack.addWidget(self._schedule_signatories_page)
-        for title, description in FUTURE_NAVIGATION_MODULES:
-            self._stack.addWidget(self._build_future_phase_page(title, description))
+        # Main content stack. Route keys keep navigation independent of tree row order.
+        self._page_indexes["overview"] = self._stack.addWidget(self._build_overview_page())
+        self._page_indexes["school_profile"] = self._stack.addWidget(
+            self._school_profile_page
+        )
+        self._page_indexes["school_administrators"] = self._stack.addWidget(
+            self._school_administrators_page
+        )
+        self._page_indexes["schedule_signatories"] = self._stack.addWidget(
+            self._schedule_signatories_page
+        )
+        for index, (title, description) in enumerate(FUTURE_NAVIGATION_MODULES):
+            route = f"future:{index}"
+            item = QTreeWidgetItem([title])
+            item.setData(0, Qt.ItemDataRole.UserRole, route)
+            self._nav_list.addTopLevelItem(item)
+            self._page_indexes[route] = self._stack.addWidget(
+                self._build_future_phase_page(title, description)
+            )
 
+        self._nav_list.expandItem(school_setup_item)
         root_layout.addWidget(sidebar)
         root_layout.addWidget(self._stack, 1)
         self.setCentralWidget(root)
 
-        self._nav_list.setCurrentRow(0)
+        self._nav_list.setCurrentItem(overview_item)
 
     def _build_overview_page(self) -> QWidget:
         page = QWidget()
@@ -294,14 +324,36 @@ class MainWindow(QMainWindow):
 
         self._solver_summary_label.setText(report.solver_result.format_summary())
 
-    def _on_navigation_changed(self, row_index: int) -> None:
-        self._stack.setCurrentIndex(row_index)
-        if row_index == 1:
+    def _on_navigation_changed(
+        self,
+        current: QTreeWidgetItem | None,
+        _previous: QTreeWidgetItem | None,
+    ) -> None:
+        if current is None:
+            return
+
+        route = current.data(0, Qt.ItemDataRole.UserRole)
+        page_index = self._page_indexes.get(route)
+        if page_index is None:
+            return
+
+        self._stack.setCurrentIndex(page_index)
+        if route == "school_profile":
             self._school_profile_page.reload()
-        elif row_index == 2:
+        elif route == "school_administrators":
             self._school_administrators_page.reload()
-        elif row_index == 3:
+        elif route == "schedule_signatories":
             self._schedule_signatories_page.reload()
+
+    def _on_navigation_item_clicked(
+        self,
+        item: QTreeWidgetItem,
+        _column: int,
+    ) -> None:
+        """Expand or collapse a navigation group when its parent is clicked."""
+        route = item.data(0, Qt.ItemDataRole.UserRole)
+        if route is None and item.childCount() > 0:
+            self._nav_list.setExpanded(item, not self._nav_list.isExpanded(item))
 
     def _on_rerun_solver(self) -> None:
         try:
