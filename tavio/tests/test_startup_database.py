@@ -384,7 +384,11 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._database_manager is db_manager
         assert not paths.db_path.exists()
 
-        assert window._nav_list.count() == 4 + len(FUTURE_NAVIGATION_MODULES)
+        assert window._nav_list.topLevelItemCount() == 2 + len(FUTURE_NAVIGATION_MODULES)
+        school_setup_item = window._nav_list.topLevelItem(1)
+        assert school_setup_item.text(0) == "School Setup"
+        assert school_setup_item.childCount() == 3
+        assert window._stack.count() == 4 + len(FUTURE_NAVIGATION_MODULES)
         assert window._dep_table.rowCount() == len(initial_report.dependencies)
         assert window._solver_summary_label.text() == initial_report.solver_result.format_summary()
 
