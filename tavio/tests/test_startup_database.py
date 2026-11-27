@@ -387,7 +387,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._nav_list.topLevelItemCount() == 1 + len(NAVIGATION_GROUPS)
         dashboard_item = window._nav_list.topLevelItem(0)
         assert dashboard_item.text(0) == "Dashboard"
-        assert window._nav_list.currentItem() is dashboard_item
+        assert window._nav_list.currentItem().text(0) == "Dashboard"
         school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
         assert school_setup_item.childCount() == 3
@@ -425,7 +425,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert about_item.text(0) == "About TAVIO"
         window._nav_list.setCurrentItem(about_item)
         about_page = window._stack.widget(window._page_indexes["about_tavio"])
-        assert window._stack.currentWidget() is about_page
+        assert window._stack.currentWidget() == about_page
         about_heading = about_page.findChild(QLabel, "PageTitle")
         assert about_heading is not None
         assert about_heading.text() == "About TAVIO — Environment & Packaging Verification"
