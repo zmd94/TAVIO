@@ -504,6 +504,7 @@ class MainWindow(QMainWindow):
         if self._dashboard_button is not None:
             self._dashboard_button.setVisible(not collapsed)
         self._nav_list.setIndentation(0 if collapsed else 16)
+        self._nav_list.setIconSize(QSize(26, 20) if collapsed else QSize(20, 20))
         for index in range(self._nav_list.topLevelItemCount()):
             item = self._nav_list.topLevelItem(index)
             self._set_navigation_item_alignment(item, collapsed)
