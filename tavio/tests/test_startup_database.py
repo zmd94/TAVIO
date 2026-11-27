@@ -423,12 +423,20 @@ def test_main_window_receives_database_manager_and_preserves_ui(
             "Timetable Administration &\nValidation Intelligent Organizer"
         )
         assert brand_subtitle.wordWrap()
-        workspace_item = window._nav_list.topLevelItem(1)
-        exit_item = workspace_item.child(4)
+        file_item = window._nav_list.topLevelItem(1)
+        assert file_item.text(0) == "File"
+        save_as_item = file_item.child(3)
+        assert save_as_item.text(0) == "Save As"
+        assert not save_as_item.icon(0).isNull()
+        exit_item = file_item.child(4)
         assert exit_item.text(0) == "Exit"
         assert not exit_item.icon(0).isNull()
-        assert not window._nav_list.topLevelItem(7).icon(0).isNull()
-        assert not window._nav_list.topLevelItem(8).icon(0).isNull()
+        reports_item = window._nav_list.topLevelItem(7)
+        settings_item = window._nav_list.topLevelItem(8)
+        assert reports_item.text(0) == "Reports"
+        assert settings_item.text(0) == "Settings"
+        assert not reports_item.icon(0).isNull()
+        assert not settings_item.icon(0).isNull()
         assert window._nav_list.rootIsDecorated() is False
         assert window._nav_list.indentation() == 16
         assert window._nav_list.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -495,7 +503,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._sidebar_collapsed is False
         assert 330 <= window._sidebar.width() <= 360
         assert window._sidebar_toggle_button.toolTip() == "Minimize sidebar"
-        assert window._nav_list.topLevelItem(1).text(0) == "Workspace"
+        assert window._nav_list.topLevelItem(1).text(0) == "File"
         assert window._stack.count() == 1 + sum(len(group[3]) for group in NAVIGATION_GROUPS)
         assert window._dep_table.rowCount() == len(initial_report.dependencies)
         assert window._solver_summary_label.text() == initial_report.solver_result.format_summary()
