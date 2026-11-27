@@ -6,14 +6,14 @@ This project uses version numbers in the format `vMAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
-The entries below summarize code changes present in the repository's `main` branch. Items under the verified history have passed their recorded checks; the latest navigation milestone is listed separately pending a fresh local test run. These are not a published or tagged release. No release version is assigned yet.
+The entries below summarize code changes present in the repository's `main` branch. The navigation milestone has passed local automated tests and manual application verification. These are not a published or tagged release. No release version is assigned yet.
 
-### Implemented — pending local verification
+### Verified
 
 - **Navigation structure milestone:** Completed the main collapsible sidebar hierarchy for Dashboard, File, School Setup, Master Data, Timetable, Manual Editor, Absences & Relief, Reports, and Settings.
 - **School Setup navigation:** Added and ordered the six submenu destinations as Academic Year, Bell & Break Times, School Sessions, School Profile, School Administrators, and Schedule Signatories. Academic Year, Bell & Break Times, and School Sessions are navigation placeholders only; their page workflows remain to be designed and implemented.
 - **Sidebar interaction and presentation:** Added expanded/collapsed navigation behaviour, custom icons for key menu items, Dashboard positioning, and removal of sidebar tooltips. Save As shares the Save icon.
-- **Navigation tests:** Updated startup/navigation tests to assert the School Setup submenu order, route keys, icons, collapsed startup state, sidebar layout, and removal of tooltips. A fresh local Ruff and full pytest run is still required for this latest milestone.
+- **Navigation verification:** Updated startup/navigation tests to assert the School Setup submenu order, route keys, icons, collapsed startup state, sidebar layout, and removal of tooltips. The complete local test suite passed (114/114 tests), Ruff passed, and manual application testing confirmed that the menus and navigation work correctly.
 
 ### Added
 
@@ -51,6 +51,7 @@ The entries below summarize code changes present in the repository's `main` bran
 
 ### Verification
 
+- Navigation milestone verification: the complete local test suite passed **114/114 tests**, Ruff checks passed, and manual application testing confirmed menu/navigation behaviour.
 - Class Teacher Migration v3 verification: **111/111 automated tests passed**, including **29/29 database tests**; Ruff checks passed.
 - Migration v4 verification: **32/32 database tests passed**; the complete test suite passed **114/114 tests**; `python -m ruff check src tests` reported **All checks passed**.
 - Navigation test alignment verification: the complete test suite passed **114/114 tests** in **82.42 seconds** after the four navigation/startup test updates.
