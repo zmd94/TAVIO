@@ -82,7 +82,7 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
-    app.setApplicationDisplayName(APP_NAME)
+    app.setApplicationDisplayName("")
     app.setOrganizationName(APP_NAME)
 
     app_icon_path = get_asset_path("TAVIO_icon.png")
