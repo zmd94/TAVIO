@@ -153,23 +153,8 @@ class MainWindow(QMainWindow):
         self._brand_row = brand_row
         brand_row.setSpacing(10)
 
-        brand_icon = QLabel()
-        self._brand_icon_label = brand_icon
-        brand_icon_path = get_asset_path("TAVIO_icon.png")
-        if brand_icon_path.is_file():
-            pixmap = QPixmap(str(brand_icon_path))
-            self._brand_icon_pixmap = pixmap
-            brand_icon.setPixmap(
-                pixmap.scaled(
-                    42,
-                    42,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-            brand_icon.setFixedSize(46, 46)
-        else:
-            logger.warning("Sidebar brand icon not found at %s.", brand_icon_path)
+        self._brand_icon_label = None
+        self._brand_icon_pixmap = None
 
         brand_text_widget = QWidget()
         self._brand_text_widget = brand_text_widget
@@ -183,7 +168,6 @@ class MainWindow(QMainWindow):
         subtitle_label.setWordWrap(True)
         brand_text.addWidget(subtitle_label)
 
-        brand_row.addWidget(brand_icon, 0, Qt.AlignmentFlag.AlignVCenter)
         brand_row.addWidget(brand_text_widget, 1)
         toggle_button = QPushButton()
         self._sidebar_toggle_button = toggle_button
@@ -330,7 +314,7 @@ class MainWindow(QMainWindow):
         if title == "School Setup":
             item.setIcon(0, self._create_semantic_navigation_icon("home"))
         elif title == "Settings":
-            item.setIcon(0, self._create_semantic_navigation_icon("sliders"))
+            item.setIcon(0, self._create_semantic_navigation_icon("gear"))
         elif title == "Reports":
             item.setIcon(0, self._create_semantic_navigation_icon("printer"))
         elif route == "master_teachers":
@@ -452,11 +436,13 @@ class MainWindow(QMainWindow):
             if item.data(0, label_role) is None:
                 item.setData(0, label_role, item.text(0))
             item.setText(0, "")
+            item.setToolTip(0, "")
             item.setTextAlignment(0, Qt.AlignmentFlag.AlignCenter)
         else:
             saved_label = item.data(0, label_role)
             if saved_label is not None:
                 item.setText(0, saved_label)
+                item.setToolTip(0, saved_label)
                 item.setData(0, label_role, None)
             item.setTextAlignment(
                 0,
@@ -492,8 +478,6 @@ class MainWindow(QMainWindow):
         )
         self._brand_row.setSpacing(0 if collapsed else 10)
         self._brand_text_widget.setVisible(not collapsed)
-        if self._brand_icon_label is not None:
-            self._brand_icon_label.setVisible(not collapsed)
         self._nav_list.setIndentation(0 if collapsed else 16)
         for index in range(self._nav_list.topLevelItemCount()):
             item = self._nav_list.topLevelItem(index)
@@ -505,20 +489,6 @@ class MainWindow(QMainWindow):
         self._nav_list.clearFocus()
         self._nav_list.setRootIsDecorated(False)
         self._nav_list.setStyleSheet("color: transparent;" if collapsed else "")
-
-        if self._brand_icon_label is not None:
-            icon_size = 34 if collapsed else 46
-            self._brand_icon_label.setFixedSize(icon_size, icon_size)
-            if self._brand_icon_pixmap is not None:
-                pixmap_size = icon_size - 4
-                self._brand_icon_label.setPixmap(
-                    self._brand_icon_pixmap.scaled(
-                        pixmap_size,
-                        pixmap_size,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                )
 
         if self._sidebar_toggle_button is not None:
             self._sidebar_toggle_button.setIcon(
