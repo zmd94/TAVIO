@@ -141,7 +141,9 @@ class MainWindow(QMainWindow):
         sidebar = QFrame()
         self._sidebar = sidebar
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(250)
+        sidebar.setMinimumWidth(286)
+        sidebar.setMaximumWidth(340)
+        sidebar.resize(300, self.height())
         sidebar_layout = QVBoxLayout(sidebar)
         self._sidebar_layout = sidebar_layout
         sidebar_layout.setContentsMargins(14, 18, 14, 18)
@@ -202,7 +204,9 @@ class MainWindow(QMainWindow):
         self._nav_list.setRootIsDecorated(False)
         self._nav_list.setItemsExpandable(True)
         self._nav_list.setExpandsOnDoubleClick(False)
-        self._nav_list.setIndentation(0)
+        self._nav_list.setIndentation(16)
+        self._nav_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         dashboard_item = QTreeWidgetItem(["Dashboard"])
         self._set_navigation_item_icon(dashboard_item, QStyle.StandardPixmap.SP_ComputerIcon)
@@ -302,16 +306,26 @@ class MainWindow(QMainWindow):
             return
 
         self._sidebar_collapsed = collapsed
-        self._sidebar.setFixedWidth(84 if collapsed else 250)
+        if collapsed:
+            self._sidebar.setFixedWidth(76)
+        else:
+            self._sidebar.setMinimumWidth(286)
+            self._sidebar.setMaximumWidth(340)
+            self._sidebar.resize(300, self._sidebar.height())
         self._sidebar_layout.setContentsMargins(
             6 if collapsed else 14,
             8 if collapsed else 18,
             6 if collapsed else 14,
             8 if collapsed else 18,
         )
-        self._brand_row.setSpacing(4 if collapsed else 10)
+        self._brand_row.setSpacing(0 if collapsed else 10)
         self._brand_text_widget.setVisible(not collapsed)
-        self._nav_list.setIndentation(0)
+        if self._brand_icon_label is not None:
+            self._brand_icon_label.setVisible(not collapsed)
+        self._nav_list.setIndentation(0 if collapsed else 16)
+        self._nav_list.clearSelection()
+        self._nav_list.setCurrentItem(None)
+        self._nav_list.clearFocus()
         self._nav_list.setRootIsDecorated(False)
         self._nav_list.setStyleSheet("color: transparent;" if collapsed else "")
 
