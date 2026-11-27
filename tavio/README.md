@@ -16,8 +16,9 @@ This document describes the implementation status and Windows development/build 
 - Rotating UTF-8 application logging.
 - Single-instance protection using Qt QLockFile.
 - SQLite database manager, schema initialization, and versioned migration system.
-- Database migrations currently reach PRAGMA user_version = 3.
+- Database migrations currently reach PRAGMA user_version = 4.
 - Migration v3 adds nullable classes.class_teacher_id, with a foreign key to teachers(id) and ON DELETE RESTRICT.
+- Migration v4 removes unused legacy timetable autosave schema objects and the obsolete 10-minute autosave setting; it does not implement workspace recovery.
 - Startup dependency diagnostics for PySide6, OR-Tools, ReportLab, and OpenPyXL.
 - OR-Tools CP-SAT smoke test.
 - pytest and Ruff configuration.
@@ -59,7 +60,7 @@ The approved product specification separately defines a portable single-file .ta
 
 **That portable workspace-file workflow has not yet been implemented.** The existing SQLite database manager, repositories, migrations, and data lifecycle need a deliberate technical design to support the approved workspace model. Do not assume that the current local database already behaves as a portable .tavio file.
 
-See [../docs/data_file_management.md](../docs/data_file_management.md) for the approved product decisions. These are specifications, not evidence that the corresponding code exists.
+See [../docs/data_management.md](../docs/data_file_management.md) for the approved product decisions. These are specifications, not evidence that the corresponding code exists.
 
 ## Prerequisites
 
@@ -117,7 +118,7 @@ The --onedir output is generated at dist\TAVIO\. Launch the packaged executable 
 
 At runtime, TAVIO resolves the Windows local application-data location for its application files (or TAVIO_DATA_DIR when explicitly overridden for testing). The current implementation initializes application directories for database storage, logs, and the single-instance lock.
 
-The exact local SQLite runtime location is determined by the current database configuration. This local database arrangement is not the approved portable .tavio workspace workflow; see Workspace Architecture Status above.
+The current database is initialized at `%LOCALAPPDATA%\\TAVIO\\data\\tavio.db` by default (or under `TAVIO_DATA_DIR` when overridden). This local database arrangement is not the approved portable `.tavio` workspace workflow; see Workspace Architecture Status above.
 
 ## Project Structure
 
