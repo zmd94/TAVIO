@@ -11,7 +11,7 @@ The entries below summarize code changes present in the repository's `main` bran
 ### Added
 
 - **SQLite database foundation:** Introduced database connection configuration, connection and transaction management, database error handling, and a versioned migration runner using `PRAGMA user_version`.
-- **Database schema migrations:** Added the initial core schema (Migration v1), school profile/administrator/schedule-signatory schema updates (Migration v2), and Class Teacher database support (Migration v3).
+- **Database schema migrations:** Added the initial core schema (Migration v1), school profile/administrator/schedule-signatory schema updates (Migration v2), Class Teacher database support (Migration v3), and legacy autosave schema cleanup (Migration v4).
 - **School Profile management:** Added domain, repository, service, and UI support for school profile details and school logo upload/management.
 - **School Administrator management:** Added domain, repository, service, validation, and UI support for managing school administrators.
 - **Schedule Signatories management:** Added domain, repository, service, validation, and UI configuration for Teacher, Class, and Special Room schedule signatories, including Prepared By/Verified By assignments and label-language preference.
@@ -24,6 +24,7 @@ The entries below summarize code changes present in the repository's `main` bran
 - **Windows packaging:** Improved PyInstaller configuration, resource and asset discovery, dependency bundling, and Windows build verification.
 - **Single-instance protection:** Adopted Qt `QLockFile` for application instance locking and clean lock release.
 - **Resource handling:** Improved resolution of bundled resources in source and PyInstaller execution environments.
+- **Legacy autosave configuration:** Removed the unused 10-minute `autosave_interval_minutes` workspace setting. The planned five-minute whole-workspace recovery interval is computer-local application configuration and is not stored in the workspace database; the recovery mechanism itself is not implemented by Migration v4.
 
 ### Fixed
 
@@ -33,6 +34,9 @@ The entries below summarize code changes present in the repository's `main` bran
 
 ### Removed
 
+- **Legacy timetable draft autosave schema:** Removed the unused `timetable_workspace_autosaves` table and its `trg_twa_base_version_ins` and `trg_twa_base_version_upd` triggers in Migration v4. The timetable draft autosave feature was not implemented; this cleanup does not remove user-created timetable drafts.
+- **Legacy autosave interval setting:** Removed the `autosave_interval_minutes` row from `app_settings`. No replacement workspace setting was added because the planned whole-workspace recovery interval belongs in computer-local application configuration.
+
 ### Security
 
 - **Image-processing safeguards:** Added decompression-bomb warning protection during school logo processing.
@@ -40,7 +44,9 @@ The entries below summarize code changes present in the repository's `main` bran
 ### Verification
 
 - Class Teacher Migration v3 verification: **111/111 automated tests passed**, including **29/29 database tests**; Ruff checks passed.
-- The migration tests cover schema version progression to v3, preservation of existing class and timetable data, nullable Class Teacher references, foreign-key enforcement, `ON DELETE RESTRICT`, SQLite integrity checks, and repeat initialization.
+- Migration v4 verification: **32/32 database tests passed**; the complete test suite passed **114/114 tests**; `python -m ruff check src tests` reported **All checks passed**.
+- The two warnings reported by the full test suite are `DeprecationWarning` messages from Google Protobuf (`MessageMapContainer` and `ScalarMapContainer`) concerning Python 3.14 compatibility. They are dependency warnings, not test failures.
+- Migration tests cover schema version progression, preservation of unrelated data, removal of the legacy autosave table/triggers/setting, foreign-key checks, SQLite integrity checks, rollback on migration failure, and repeat initialization.
 - No GitHub Actions workflow runs were found for this repository at the time this changelog was reviewed; the verification above reflects the recorded local test results.
 
 ---
