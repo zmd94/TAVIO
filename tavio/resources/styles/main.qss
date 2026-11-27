@@ -54,10 +54,6 @@ QMainWindow {
     min-height: 20px;
 }
 
-#NavigationTree::item:has-children {
-    font-weight: 600;
-}
-
 #PageTitle {
     font-size: 18px;
     font-weight: 700;
