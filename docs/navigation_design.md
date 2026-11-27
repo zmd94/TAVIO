@@ -39,7 +39,7 @@ The agreed navigation direction is a set of main modules with relevant submenus.
 - Main landing page after a workspace has been opened successfully.
 
 ### 3.2 Workspace
-- New Timetable
+- New
 - Open
 - Save
 - Save As
