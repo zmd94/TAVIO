@@ -370,7 +370,7 @@ class MainWindow(QMainWindow):
             painter.drawArc(3, 9, 14, 11, 0, 180 * 16)
         elif kind == "gear":
             painter.drawEllipse(6, 6, 8, 8)
-            painter.drawEllipse(8.5, 8.5, 3, 3)
+            painter.drawEllipse(9, 9, 2, 2)
             painter.drawLine(10, 1, 10, 5)
             painter.drawLine(10, 15, 10, 19)
             painter.drawLine(1, 10, 5, 10)
@@ -436,12 +436,21 @@ class MainWindow(QMainWindow):
         centered: bool,
     ) -> None:
         """Center navigation icons in compact mode and restore labels in expanded mode."""
-        alignment = (
-            Qt.AlignmentFlag.AlignCenter
-            if centered
-            else Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
-        )
-        item.setTextAlignment(0, alignment)
+        label_role = Qt.ItemDataRole.UserRole + 1
+        if centered:
+            if item.data(0, label_role) is None:
+                item.setData(0, label_role, item.text(0))
+            item.setText(0, "")
+            item.setTextAlignment(0, Qt.AlignmentFlag.AlignCenter)
+        else:
+            saved_label = item.data(0, label_role)
+            if saved_label is not None:
+                item.setText(0, saved_label)
+                item.setData(0, label_role, None)
+            item.setTextAlignment(
+                0,
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+            )
 
     def _set_sidebar_collapsed(self, collapsed: bool) -> None:
         """Update sidebar width and navigation presentation without changing routes."""
