@@ -244,12 +244,12 @@ class MainWindow(QMainWindow):
 
             for child_title, route, scope in children:
                 child = QTreeWidgetItem([child_title])
+                child.setToolTip(0, child_title)
+                child.setData(0, Qt.ItemDataRole.UserRole, route)
                 self._set_navigation_item_icon(
                     child,
                     self._navigation_route_icon(route),
                 )
-                child.setToolTip(0, child_title)
-                child.setData(0, Qt.ItemDataRole.UserRole, route)
                 group_item.addChild(child)
 
                 if route == "school_profile":
@@ -283,8 +283,6 @@ class MainWindow(QMainWindow):
             "Reports": QStyle.StandardPixmap.SP_PrinterIcon,
             "Settings": QStyle.StandardPixmap.SP_FileDialogDetailedView,
         }
-        if title == "School Setup":
-            return QStyle.StandardPixmap.SP_DirHomeIcon
         return icons.get(title, QStyle.StandardPixmap.SP_DirIcon)
 
     def _navigation_route_icon(self, route: str) -> QStyle.StandardPixmap:
@@ -330,10 +328,60 @@ class MainWindow(QMainWindow):
         item: QTreeWidgetItem,
         icon_name: QStyle.StandardPixmap,
     ) -> None:
-        """Apply a platform-native icon to a navigation item."""
-        item.setIcon(0, self.style().standardIcon(icon_name))
-        if item.data(0, Qt.ItemDataRole.UserRole) == "workspace_exit":
+        """Apply a semantic icon to a navigation item."""
+        route = item.data(0, Qt.ItemDataRole.UserRole)
+        title = item.text(0)
+        if title == "School Setup":
+            item.setIcon(0, self._create_semantic_navigation_icon("school"))
+        elif title == "Settings":
+            item.setIcon(0, self._create_semantic_navigation_icon("gear"))
+        elif route == "master_teachers":
+            item.setIcon(0, self._create_semantic_navigation_icon("person"))
+        elif route == "workspace_exit":
             item.setIcon(0, self._create_colored_exit_icon())
+        else:
+            item.setIcon(0, self.style().standardIcon(icon_name))
+
+    def _create_semantic_navigation_icon(self, kind: str) -> QIcon:
+        """Draw compact school, person, and gear icons consistently across platforms."""
+        pixmap = QPixmap(20, 20)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(
+            QPen(
+                QColor("#dbe6f5"),
+                1.8,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+
+        if kind == "school":
+            painter.drawLine(2, 7, 10, 2)
+            painter.drawLine(10, 2, 18, 7)
+            painter.drawRect(4, 7, 12, 10)
+            painter.drawRect(8, 12, 4, 5)
+            painter.drawRect(6, 9, 2, 2)
+            painter.drawRect(12, 9, 2, 2)
+        elif kind == "person":
+            painter.drawEllipse(7, 2, 6, 6)
+            painter.drawArc(3, 9, 14, 11, 0, 180 * 16)
+        elif kind == "gear":
+            painter.drawEllipse(6, 6, 8, 8)
+            painter.drawEllipse(8.5, 8.5, 3, 3)
+            painter.drawLine(10, 1, 10, 5)
+            painter.drawLine(10, 15, 10, 19)
+            painter.drawLine(1, 10, 5, 10)
+            painter.drawLine(15, 10, 19, 10)
+            painter.drawLine(3.5, 3.5, 6.5, 6.5)
+            painter.drawLine(13.5, 13.5, 16.5, 16.5)
+            painter.drawLine(3.5, 16.5, 6.5, 13.5)
+            painter.drawLine(13.5, 6.5, 16.5, 3.5)
+
+        painter.end()
+        return QIcon(pixmap)
 
     def _create_colored_exit_icon(self) -> QIcon:
         """Create a red X icon for the Exit command."""
