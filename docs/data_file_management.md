@@ -22,13 +22,14 @@ This is a decision record only. It does not authorize implementation, database s
 
 ## 3. Workspace and data-package model
 
-1. TAVIO stores a school workspace in one `.tavio` package file, rather than asking users to manage separate files for individual database tables.
-2. The package is intended to include the school profile and settings, academic years and sessions, master data, teacher and class-teacher assignments, timetables and their versions, report settings, school assets such as the logo, and related workspace information.
-3. Users can use SAVE AS to create a portable package and transfer it to another computer, for example by USB drive or network storage.
-4. OPEN AS loads a `.tavio` package as a separate workspace.
+1. TAVIO stores a school workspace in one **native SQLite database file** with the `.tavio` extension. No ZIP layer or additional packaging format is used. The file should remain inspectable using standard SQLite software.
+2. The single `.tavio` file contains the school profile and settings, academic years and sessions, master data, teacher and class-teacher assignments, timetables and their versions, report settings, school assets such as the logo, a persistent unique workspace ID, and related workspace information.
+3. The `.tavio` file is portable. It can be moved by USB, network storage, or another user-managed transfer method and opened on another Windows computer with TAVIO installed. It does not depend on the original computer, its local logo path, a recovery file from that computer, or an internet connection.
+4. OPEN AS loads a `.tavio` file as a separate workspace.
 5. Users may keep multiple `.tavio` files and switch between them. Workspace data must remain isolated; data from different packages must never be mixed.
 6. TAVIO must validate compatibility and data integrity before accepting a package as a workspace.
-7. Opening a package must not silently modify the source file. Changes are saved to the main package only through an explicit SAVE or SAVE AS action. Periodic autosave writes to the associated recovery file, not to the main `.tavio` file.
+7. Opening a package must not silently modify the source file. Changes are saved to the main package only through an explicit SAVE or SAVE AS action. Periodic autosave writes to computer-local recovery data, not to the main `.tavio` file.
+8. Every workspace has a unique internal ID stored in its SQLite database. The ID is generated when the workspace is created and remains unchanged when the file is saved, copied, moved, or renamed. A newly created workspace receives a new ID, including NEW TIMETABLE workspaces that copy the agreed school information from the current workspace. The ID is not displayed in the normal user interface.
 
 ## 4. Main workspace commands
 
@@ -94,7 +95,7 @@ Copying the three retained sections must not modify or delete data in the source
 3. On the next application launch, TAVIO automatically attempts to reopen that last workspace.
 4. If the last file has been moved, renamed, deleted, or cannot be opened, TAVIO asks the user to select another `.tavio` file.
 5. TAVIO must not silently create a different workspace or overwrite a data file when reopening fails.
-6. If a valid autosave recovery file exists for the last workspace, TAVIO must detect it and follow the recovery procedure in Section 11.
+6. TAVIO checks for computer-local recovery data associated with the workspace ID and follows the recovery procedure in Section 11 if valid recovery data exists. If this computer has no recovery data for that workspace ID, TAVIO establishes a new local recovery context after the workspace is successfully opened.
 
 ## 7. Unsaved changes before OPEN AS
 
@@ -152,13 +153,17 @@ The warning must explain that the recovery file could not be updated and that th
 
 Do not show this autosave-failure warning during ordinary work or merely because an autosave attempt has failed. This rule does not remove the separate SAVE / DON'T SAVE / CANCEL confirmation behavior already agreed for EXIT and NEW TIMETABLE.
 
-### 9.2 Recovery-file name and location
+### 9.2 Recovery-file name, identity, and computer-local location
 
-- Keep one associated recovery file for each saved workspace, in the same folder as its main `.tavio` file.
-- Use the corresponding name, for example `Data_Sekolah_2026.tavio.bak`.
-- The `.bak` file is the latest autosave recovery state. It is **not** a copy of the old main file.
-- Do not maintain multiple dated backups or a rolling autosave history.
-- For a workspace that has not yet been saved to a user-selected `.tavio` path, the exact recovery-file location and naming must be designed separately; autosave must not silently create or overwrite an unrelated user file.
+- Recovery data is stored locally on the current computer in an application-local recovery area, not beside the portable `.tavio` file.
+- Recovery data is associated with the workspace using its persistent unique workspace ID, not only the workspace filename or folder path. Renaming or moving the `.tavio` file therefore does not change the workspace identity.
+- The local recovery record must contain the same workspace ID. Before offering or applying recovery, TAVIO must compare the recovery ID with the ID read from the target workspace. If the IDs do not match, recovery is blocked and the mismatched recovery data must not overwrite the workspace.
+- Each computer maintains its own recovery state for the same workspace ID. A recovery file from one computer is not required or expected to be present on another computer.
+- When a workspace is opened on a computer that has no local recovery record for its ID, TAVIO creates a fresh local recovery context after successful validation/opening. This must not modify the source `.tavio` file.
+- The exact local directory and filename convention are implementation details. A workspace that has not yet been saved also uses its workspace ID to keep its temporary recovery state separate from other workspaces.
+- The `.bak` recovery state represents the latest successfully autosaved state. It is **not** a copy of the old main file.
+- Keep one current recovery state per workspace per computer; do not maintain multiple dated autosave files or a rolling autosave history.
+- The absence of a local `.bak` file must never prevent a valid `.tavio` file from being opened.
 
 ### 9.3 No password protection
 
@@ -208,10 +213,13 @@ The recovery flow must distinguish ordinary autosaved changes from an interrupte
 
 Before opening a selected `.tavio` file, TAVIO checks:
 
-1. **File format:** The file is a valid TAVIO package.
+1. **File format:** The file is a valid TAVIO workspace stored as a native SQLite database.
 2. **SQLite structure:** The database structure is readable and contains the required schema objects.
-3. **Schema version:** The database schema version is supported by the installed TAVIO application.
-4. **Database integrity:** SQLite integrity and foreign-key relationships are checked.
+3. **Workspace identity:** The database contains a valid unique workspace ID. This ID is used to locate and verify computer-local recovery data.
+4. **Schema version:** The database schema version is supported by the installed TAVIO application.
+5. **Database integrity:** SQLite integrity and foreign-key relationships are checked.
+
+The local recovery file is not a prerequisite for OPEN AS. If no local recovery exists for the validated workspace ID, TAVIO opens the workspace and establishes a new computer-local recovery context.
 
 If validation fails:
 
@@ -236,7 +244,22 @@ If a selected `.tavio` package uses an older schema version supported for migrat
 
 Migration must not silently lose data. Migration steps and compatibility must be explicitly defined and tested for each supported schema version.
 
-## 14. Compatibility with files from newer TAVIO versions
+## 14. Offline-first operation and multiple computers
+
+TAVIO is an **offline-first desktop application**. Each computer operates independently and does not need internet access or communication with another computer to open, edit, save, or recover a local workspace.
+
+The user explicitly decided:
+
+1. TAVIO does not need to know whether the same `.tavio` file or another copy of the workspace is open on another computer.
+2. TAVIO does not implement cross-computer file locking or opening-session detection.
+3. TAVIO does not provide automatic synchronization, conflict detection, or merging of changes between computers.
+4. Each computer works with its own opened workspace state and its own computer-local recovery data.
+5. Users are responsible for transferring `.tavio` files between computers and deciding which copy is the latest/authoritative one.
+6. The product does not promise collaborative editing or safe simultaneous synchronization of one shared workspace across computers.
+
+When users transfer files using USB, network storage, or cloud storage, TAVIO treats the file selected by the user as the workspace to open. It does not compare or reconcile other copies. The application must not introduce cross-computer coordination contrary to this offline-first decision.
+
+## 15. Compatibility with files from newer TAVIO versions
 
 **Agreed decision:** TAVIO must reject a `.tavio` file created by a newer TAVIO application version than the installed application.
 
@@ -245,16 +268,16 @@ Migration must not silently lose data. Migration steps and compatibility must be
 - The selected source file must not be modified or migrated.
 - The currently active workspace remains intact and unchanged.
 
-## 15. Implementation boundaries and safeguards
+## 16. Implementation boundaries and safeguards
 
 - This document does not authorize changes to the existing database schema, migrations, or application code.
 - Do not implement workspace packaging, autosave, save/recovery, or migration by making unrelated changes to stable modules.
 - Preserve existing data and enforce database referential integrity.
 - Keep workspaces isolated and protect source files during OPEN AS, NEW TIMETABLE, SAVE, SAVE AS, autosave, and migration.
-- Define and test failure handling, including process termination, power loss, insufficient disk space, permission errors, and interrupted file replacement.
-- The design must specifically test that autosave never modifies the main `.tavio` file, that an incomplete autosave cannot replace the last valid `.bak`, and that SAVE does not delete the recovery file before the main file is verified.
+- Define and test failure handling, including process termination, power loss, insufficient disk space, permission errors, interrupted file replacement, recovery on a second computer, and independent local recovery states.
+- The design must specifically test that autosave never modifies the main `.tavio` file, that an incomplete autosave cannot replace the last valid computer-local recovery state, that recovery identity must match the workspace ID, and that SAVE does not delete recovery data before the main file is verified.
 - Any implementation proposal that changes these agreed user-facing behaviors must be brought back for review before development.
 
 ---
 
-**Document status:** Workspace, autosave, backup, recovery, password-protection, and version-compatibility decisions recorded. Implementation remains unauthorized pending separate technical review.
+**Document status:** Workspace, portable native-SQLite file, offline-first multi-computer behavior, workspace identity, computer-local autosave/recovery, password-protection, and version-compatibility decisions recorded. Implementation remains unauthorized pending separate technical review.
