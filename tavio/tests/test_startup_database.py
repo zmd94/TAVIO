@@ -466,8 +466,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is True
         assert window._sidebar.width() == 76
-        assert window._brand_icon_label is not None
-        assert window._brand_icon_label.isHidden()
+        assert window._brand_icon_label is None
         assert window._brand_text_widget is not None
         assert window._brand_text_widget.isHidden()
         assert window._nav_list.currentItem() is None
