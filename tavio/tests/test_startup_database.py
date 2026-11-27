@@ -477,10 +477,8 @@ def test_main_window_receives_database_manager_and_preserves_ui(
             window._nav_list.topLevelItem(index).text(0) == ""
             for index in range(window._nav_list.topLevelItemCount())
         )
-        assert all(
-            window._nav_list.topLevelItem(index).toolTip(0) == ""
-            for index in range(window._nav_list.topLevelItemCount())
-        )
+        assert window._nav_list.iconSize().width() == 26
+        assert not hasattr(window, "eventFilter") or "eventFilter" not in type(window).__dict__
         assert all(
             window._nav_list.topLevelItem(index).textAlignment(0)
             == Qt.AlignmentFlag.AlignCenter
@@ -511,6 +509,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._sidebar_collapsed is False
         assert 330 <= window._sidebar.width() <= 360
         assert window._sidebar_toggle_button.toolTip() == "Minimize sidebar"
+        assert window._nav_list.iconSize().width() == 20
         assert window._nav_list.topLevelItem(1).text(0) == "File"
         assert window._stack.count() == 1 + sum(len(group[3]) for group in NAVIGATION_GROUPS)
         assert window._dep_table.rowCount() == len(initial_report.dependencies)
