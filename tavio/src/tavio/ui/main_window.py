@@ -141,9 +141,9 @@ class MainWindow(QMainWindow):
         sidebar = QFrame()
         self._sidebar = sidebar
         sidebar.setObjectName("Sidebar")
-        sidebar.setMinimumWidth(286)
-        sidebar.setMaximumWidth(340)
-        sidebar.resize(300, self.height())
+        sidebar.setMinimumWidth(330)
+        sidebar.setMaximumWidth(360)
+        sidebar.resize(340, self.height())
         sidebar_layout = QVBoxLayout(sidebar)
         self._sidebar_layout = sidebar_layout
         sidebar_layout.setContentsMargins(14, 18, 14, 18)
@@ -178,8 +178,11 @@ class MainWindow(QMainWindow):
         brand_text.setSpacing(2)
         brand_label = QLabel(APP_NAME)
         brand_label.setObjectName("BrandTitle")
-        subtitle_label = QLabel("Timetable & Relief System")
+        subtitle_label = QLabel(
+            "Timetable Administration &\\nValidation Intelligent Organizer"
+        )
         subtitle_label.setObjectName("BrandSubtitle")
+        subtitle_label.setWordWrap(True)
         brand_text.addWidget(brand_label)
         brand_text.addWidget(subtitle_label)
 
@@ -277,13 +280,19 @@ class MainWindow(QMainWindow):
             "Timetable": QStyle.StandardPixmap.SP_FileDialogListView,
             "Manual Editor": QStyle.StandardPixmap.SP_FileDialogContentsView,
             "Absences & Relief": QStyle.StandardPixmap.SP_MessageBoxWarning,
-            "Reports": QStyle.StandardPixmap.SP_FileDialogInfoView,
-            "Settings": QStyle.StandardPixmap.SP_ComputerIcon,
+            "Reports": QStyle.StandardPixmap.SP_PrinterIcon,
+            "Settings": QStyle.StandardPixmap.SP_FileDialogDetailedView,
         }
+        if title == "School Setup":
+            return QStyle.StandardPixmap.SP_DirHomeIcon
         return icons.get(title, QStyle.StandardPixmap.SP_DirIcon)
 
     def _navigation_route_icon(self, route: str) -> QStyle.StandardPixmap:
         """Return a meaningful icon for each navigation destination."""
+        if route in {"workspace_exit"}:
+            return QStyle.StandardPixmap.SP_DialogCloseButton
+        if route == "master_teachers":
+            return QStyle.StandardPixmap.SP_DirIcon
         icons = {
             "workspace_new": QStyle.StandardPixmap.SP_FileDialogNewFolder,
             "workspace_open": QStyle.StandardPixmap.SP_DialogOpenButton,
@@ -293,7 +302,7 @@ class MainWindow(QMainWindow):
             "school_profile": QStyle.StandardPixmap.SP_FileDialogInfoView,
             "school_administrators": QStyle.StandardPixmap.SP_DirHomeIcon,
             "schedule_signatories": QStyle.StandardPixmap.SP_DialogApplyButton,
-            "master_teachers": QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            "master_teachers": QStyle.StandardPixmap.SP_DirIcon,
             "master_classes": QStyle.StandardPixmap.SP_FileDialogListView,
             "master_class_teacher": QStyle.StandardPixmap.SP_DirHomeIcon,
             "master_subjects": QStyle.StandardPixmap.SP_FileIcon,
@@ -323,6 +332,27 @@ class MainWindow(QMainWindow):
     ) -> None:
         """Apply a platform-native icon to a navigation item."""
         item.setIcon(0, self.style().standardIcon(icon_name))
+        if item.data(0, Qt.ItemDataRole.UserRole) == "workspace_exit":
+            item.setIcon(0, self._create_colored_exit_icon())
+
+    def _create_colored_exit_icon(self) -> QIcon:
+        """Create a red X icon for the Exit command."""
+        pixmap = QPixmap(20, 20)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(
+            QPen(
+                QColor("#e53935"),
+                3.0,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+            )
+        )
+        painter.drawLine(5, 5, 15, 15)
+        painter.drawLine(15, 5, 5, 15)
+        painter.end()
+        return QIcon(pixmap)
 
     def _toggle_sidebar(self) -> None:
         """Toggle between the full navigation sidebar and its icon-only state."""
@@ -352,6 +382,19 @@ class MainWindow(QMainWindow):
         painter.end()
         return QIcon(pixmap)
 
+    def _set_navigation_item_alignment(
+        self,
+        item: QTreeWidgetItem,
+        centered: bool,
+    ) -> None:
+        """Center navigation icons in compact mode and restore labels in expanded mode."""
+        alignment = (
+            Qt.AlignmentFlag.AlignCenter
+            if centered
+            else Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+        )
+        item.setTextAlignment(0, alignment)
+
     def _set_sidebar_collapsed(self, collapsed: bool) -> None:
         """Update sidebar width and navigation presentation without changing routes."""
         if (
@@ -370,9 +413,9 @@ class MainWindow(QMainWindow):
                     item.setExpanded(False)
             self._sidebar.setFixedWidth(76)
         else:
-            self._sidebar.setMinimumWidth(286)
-            self._sidebar.setMaximumWidth(340)
-            self._sidebar.resize(300, self._sidebar.height())
+            self._sidebar.setMinimumWidth(330)
+            self._sidebar.setMaximumWidth(360)
+            self._sidebar.resize(340, self._sidebar.height())
         self._sidebar_layout.setContentsMargins(
             6 if collapsed else 14,
             8 if collapsed else 18,
@@ -384,6 +427,11 @@ class MainWindow(QMainWindow):
         if self._brand_icon_label is not None:
             self._brand_icon_label.setVisible(not collapsed)
         self._nav_list.setIndentation(0 if collapsed else 16)
+        for index in range(self._nav_list.topLevelItemCount()):
+            item = self._nav_list.topLevelItem(index)
+            self._set_navigation_item_alignment(item, collapsed)
+            for child_index in range(item.childCount()):
+                self._set_navigation_item_alignment(item.child(child_index), collapsed)
         self._nav_list.clearSelection()
         self._nav_list.setCurrentItem(None)
         self._nav_list.clearFocus()
