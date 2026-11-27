@@ -481,7 +481,7 @@ def test_main_window_navigates_to_schedule_signatories_and_reloads(
         database_manager=db_manager,
     )
     try:
-        school_setup_item = window._nav_list.topLevelItem(1)
+        school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
         signatories_item = school_setup_item.child(2)
         assert signatories_item.text(0) == "Schedule Signatories"
