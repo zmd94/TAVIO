@@ -24,6 +24,7 @@ The entries below summarize code changes present in the repository's `main` bran
 - **Windows packaging:** Improved PyInstaller configuration, resource and asset discovery, dependency bundling, and Windows build verification.
 - **Single-instance protection:** Adopted Qt `QLockFile` for application instance locking and clean lock release.
 - **Resource handling:** Improved resolution of bundled resources in source and PyInstaller execution environments.
+- **Navigation test coverage:** Updated School Profile, School Administrators, Schedule Signatories, and startup database tests to match the `QTreeWidget` sidebar hierarchy, verify stable route keys, and assert stacked-page counts.
 - **Legacy autosave configuration:** Removed the unused 10-minute `autosave_interval_minutes` workspace setting. The planned five-minute whole-workspace recovery interval is computer-local application configuration and is not stored in the workspace database; the recovery mechanism itself is not implemented by Migration v4.
 
 ### Fixed
@@ -45,7 +46,8 @@ The entries below summarize code changes present in the repository's `main` bran
 
 - Class Teacher Migration v3 verification: **111/111 automated tests passed**, including **29/29 database tests**; Ruff checks passed.
 - Migration v4 verification: **32/32 database tests passed**; the complete test suite passed **114/114 tests**; `python -m ruff check src tests` reported **All checks passed**.
-- The two warnings reported by the full test suite are `DeprecationWarning` messages from Google Protobuf (`MessageMapContainer` and `ScalarMapContainer`) concerning Python 3.14 compatibility. They are dependency warnings, not test failures.
+- Navigation test alignment verification: the complete test suite passed **114/114 tests** in **82.42 seconds** after the four navigation/startup test updates.
+- The two warnings reported by the latest full test-suite run are `DeprecationWarning` messages from Google Protobuf (`MessageMapContainer` and `ScalarMapContainer`) concerning Python 3.14 compatibility. They are dependency warnings, not test failures.
 - Migration tests cover schema version progression, preservation of unrelated data, removal of the legacy autosave table/triggers/setting, foreign-key checks, SQLite integrity checks, rollback on migration failure, and repeat initialization.
 - No GitHub Actions workflow runs were found for this repository at the time this changelog was reviewed; the verification above reflects the recorded local test results.
 
