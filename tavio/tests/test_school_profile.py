@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from PIL import Image
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from tavio.config import (
@@ -817,8 +818,12 @@ def test_main_window_navigates_to_school_profile_and_reloads(
         database_manager=db_manager,
     )
     try:
-        assert window._nav_list.item(1).text() == "School Profile (Phase 1)"
-        window._nav_list.setCurrentRow(1)
+        school_setup_item = window._nav_list.topLevelItem(1)
+        assert school_setup_item.text(0) == "School Setup"
+        profile_item = school_setup_item.child(0)
+        assert profile_item.text(0) == "School Profile"
+        assert profile_item.data(0, Qt.ItemDataRole.UserRole) == "school_profile"
+        window._nav_list.setCurrentItem(profile_item)
         assert window._stack.currentWidget() is window._school_profile_page
         assert window._school_profile_page._school_name_input.text() == "SMK Integrasi"
         assert window._school_profile_page._school_code_input.text() == "BEA1234"
