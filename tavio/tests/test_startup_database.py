@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QLabel
 
 from tavio import main as tavio_main
@@ -436,9 +437,9 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._sidebar_collapsed is True
         assert window._sidebar.width() == 76
         assert window._brand_icon_label is not None
-        assert not window._brand_icon_label.isVisible()
+        assert window._brand_icon_label.isHidden()
         assert window._brand_text_widget is not None
-        assert not window._brand_text_widget.isVisible()
+        assert window._brand_text_widget.isHidden()
         assert window._nav_list.currentItem() is None
         assert not window._nav_list.hasFocus()
         assert window._sidebar_toggle_button.toolTip() == "Expand sidebar"
