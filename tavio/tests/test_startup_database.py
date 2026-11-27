@@ -19,7 +19,7 @@ from tavio.services.startup_service import (
     StartupService,
 )
 from tavio.solver.smoke_test import SolverSmokeResult
-from tavio.ui.main_window import FUTURE_NAVIGATION_MODULES, MainWindow
+from tavio.ui.main_window import NAVIGATION_GROUPS, MainWindow
 
 
 def _make_dummy_report(*, objective_value: int = 15) -> StartupDiagnosticReport:
@@ -384,8 +384,11 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._database_manager is db_manager
         assert not paths.db_path.exists()
 
-        assert window._nav_list.topLevelItemCount() == 2 + len(FUTURE_NAVIGATION_MODULES)
-        school_setup_item = window._nav_list.topLevelItem(1)
+        assert window._nav_list.topLevelItemCount() == 1 + len(NAVIGATION_GROUPS)
+        dashboard_item = window._nav_list.topLevelItem(0)
+        assert dashboard_item.text(0) == "Dashboard"
+        assert window._nav_list.currentItem() is dashboard_item
+        school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
         assert school_setup_item.childCount() == 3
         assert not window._nav_list.topLevelItem(0).icon(0).isNull()
@@ -408,18 +411,35 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert not window._sidebar_toggle_button.icon().isNull()
         assert window._nav_list.rootIsDecorated() is False
         assert window._nav_list.indentation() == 0
+        assert window._stack.count() == 1 + sum(len(group[3]) for group in NAVIGATION_GROUPS)
+        dashboard_labels = window._stack.widget(window._page_indexes["dashboard"]).findChildren(
+            __import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel
+        )
+        assert [label.text() for label in dashboard_labels] == [
+            "Not yet implement (Phase 1).",
+            "Planned scope: School workspace dashboard, academic year and session context, "
+            " "summary cards, workspace readiness, timetable status, and quick actions.",
+        ]
+        settings_item = window._nav_list.topLevelItem(8)
+        about_item = settings_item.child(2)
+        assert about_item.text(0) == "About TAVIO"
+        window._nav_list.setCurrentItem(about_item)
+        assert window._stack.currentWidget() is window._stack.widget(
+            window._page_indexes["about_tavio"]
+        )
+        window._nav_list.setCurrentItem(dashboard_item)
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is True
         assert window._sidebar.width() == 84
         assert window._sidebar_toggle_button.toolTip() == "Expand sidebar"
         assert not window._sidebar_toggle_button.icon().isNull()
-        assert window._nav_list.topLevelItem(0).text(0) == "System Overview (Phase 0)"
+        assert window._nav_list.topLevelItem(0).text(0) == "Dashboard"
 
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is False
         assert window._sidebar.width() == 250
         assert window._sidebar_toggle_button.toolTip() == "Minimize sidebar"
-        assert window._stack.count() == 4 + len(FUTURE_NAVIGATION_MODULES)
+        assert window._stack.count() == 1 + sum(len(group[3]) for group in NAVIGATION_GROUPS)
         assert window._dep_table.rowCount() == len(initial_report.dependencies)
         assert window._solver_summary_label.text() == initial_report.solver_result.format_summary()
 
