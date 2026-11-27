@@ -399,12 +399,12 @@ def test_main_window_receives_database_manager_and_preserves_ui(
             school_setup_item.child(index).text(0)
             for index in range(school_setup_item.childCount())
         ] == [
+            "Academic Year",
+            "Bell & Break Times",
+            "School Sessions",
             "School Profile",
             "School Administrators",
             "Schedule Signatories",
-            "Academic Year",
-            "School Sessions",
-            "Bell & Break Times",
         ]
         assert school_setup_item.child(3).data(0, Qt.ItemDataRole.UserRole) == "school_academic_year"
         assert school_setup_item.child(4).data(0, Qt.ItemDataRole.UserRole) == "school_sessions"
