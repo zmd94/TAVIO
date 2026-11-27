@@ -395,11 +395,11 @@ def test_main_window_receives_database_manager_and_preserves_ui(
             for index in range(school_setup_item.childCount())
         )
 
-        assert window._nav_list.isExpanded(school_setup_item)
+        assert window._nav_list.isItemExpanded(school_setup_item)
         window._on_navigation_item_clicked(school_setup_item, 0)
-        assert not window._nav_list.isExpanded(school_setup_item)
+        assert not window._nav_list.isItemExpanded(school_setup_item)
         window._on_navigation_item_clicked(school_setup_item, 0)
-        assert window._nav_list.isExpanded(school_setup_item)
+        assert window._nav_list.isItemExpanded(school_setup_item)
 
         assert window._sidebar is not None
         assert window._sidebar.width() == 250
