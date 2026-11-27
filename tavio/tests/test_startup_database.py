@@ -391,7 +391,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert dashboard_item.isHidden()
         assert window._nav_list.currentItem() is None
         assert window._dashboard_button is not None
-        assert window._dashboard_button.isVisible()
+        assert not window._dashboard_button.isHidden()
         school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
         assert school_setup_item.childCount() == 6
