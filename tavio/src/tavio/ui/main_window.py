@@ -180,10 +180,12 @@ class MainWindow(QMainWindow):
 
         brand_row.addWidget(brand_icon, 0, Qt.AlignmentFlag.AlignVCenter)
         brand_row.addWidget(brand_text_widget, 1)
-        toggle_button = QPushButton("‹")
+        toggle_button = QPushButton()
         self._sidebar_toggle_button = toggle_button
         toggle_button.setObjectName("SidebarToggle")
-        toggle_button.setFixedSize(28, 28)
+        toggle_button.setFixedSize(30, 30)
+        toggle_button.setIconSize(QSize(16, 16))
+        toggle_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowLeft))
         toggle_button.setToolTip("Minimize sidebar")
         toggle_button.setAccessibleName("Minimize sidebar")
         toggle_button.clicked.connect(self._toggle_sidebar)
@@ -192,7 +194,9 @@ class MainWindow(QMainWindow):
         self._nav_list.setObjectName("NavigationTree")
         self._nav_list.setIconSize(QSize(20, 20))
         self._nav_list.setHeaderHidden(True)
-        self._nav_list.setRootIsDecorated(True)
+        # Avoid the extra branch-indicator gutter before top-level navigation labels.
+        # Parent groups remain expandable when clicked.
+        self._nav_list.setRootIsDecorated(False)
         self._nav_list.setItemsExpandable(True)
         self._nav_list.setExpandsOnDoubleClick(False)
         self._nav_list.setIndentation(18)
@@ -305,7 +309,12 @@ class MainWindow(QMainWindow):
                 )
 
         if self._sidebar_toggle_button is not None:
-            self._sidebar_toggle_button.setText("›" if collapsed else "‹")
+            arrow = (
+                QStyle.StandardPixmap.SP_ArrowRight
+                if collapsed
+                else QStyle.StandardPixmap.SP_ArrowLeft
+            )
+            self._sidebar_toggle_button.setIcon(self.style().standardIcon(arrow))
             tooltip = "Expand sidebar" if collapsed else "Minimize sidebar"
             self._sidebar_toggle_button.setToolTip(tooltip)
             self._sidebar_toggle_button.setAccessibleName(tooltip)
