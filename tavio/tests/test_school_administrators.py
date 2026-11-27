@@ -461,7 +461,7 @@ def test_main_window_navigates_to_school_administrators_and_reloads(
         database_manager=db_manager,
     )
     try:
-        school_setup_item = window._nav_list.topLevelItem(1)
+        school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
         administrators_item = school_setup_item.child(1)
         assert administrators_item.text(0) == "School Administrators"
