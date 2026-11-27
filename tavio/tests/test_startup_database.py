@@ -416,8 +416,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert not window._sidebar_toggle_button.icon().isNull()
         brand_title = window._brand_text_widget.findChild(QLabel, "BrandTitle")
         brand_subtitle = window._brand_text_widget.findChild(QLabel, "BrandSubtitle")
-        assert brand_title is not None
-        assert brand_title.text() == "TAVIO"
+        assert brand_title is None
         assert brand_subtitle is not None
         assert brand_subtitle.text() == (
             "Timetable Administration &\nValidation Intelligent Organizer"
