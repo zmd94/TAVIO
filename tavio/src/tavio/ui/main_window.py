@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtGui import QColor, QHelpEvent, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QTreeWidget,
     QTreeWidgetItem,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -51,7 +52,7 @@ NAVIGATION_GROUPS: tuple[tuple[str, str, str, tuple[tuple[str, str, str], ...]],
     ("Manual Editor", "Phase 4", "Edit timetable assignments and validate changes before activation.", (("Edit Timetable", "manual_edit", "Edit timetable assignments."), ("Validate Changes", "manual_validate", "Validate timetable changes."))),
     ("Absences & Relief", "Phase 5", "Record teacher absences and manage relief assignments and timetables.", (("Teacher Absences", "relief_absences", "Record and review teacher absences."), ("Relief Management", "relief_management", "Manage relief teacher assignments."), ("Relief Timetable", "relief_timetable", "View the relief timetable."))),
     ("Reports", "Phase 6", "Preview, generate, and configure PDF reports.", (("PDF Preview", "reports_preview", "Preview PDF reports."), ("Generate PDF", "reports_generate", "Generate PDF reports."), ("Report Settings", "reports_settings", "Configure report settings."))),
-    ("Settings", "Phase 0", "General preferences, appearance, and application information.", (("General", "settings_general", "Configure general application settings."), ("Appearance", "settings_appearance", "Configure application appearance."), ("About TAVIO", "about_tavio", ""))),
+    ("Settings", "Phase 0", "General preferences, appearance, and application information.", (("General", "settings_general", "Configure general application settings."), ("Appearance", "settings_appearance", "Configure application appearance."), ("About", "about_tavio", ""))),
 )
 
 
@@ -156,19 +157,7 @@ class MainWindow(QMainWindow):
         self._brand_icon_label = None
         self._brand_icon_pixmap = None
 
-        brand_text_widget = QWidget()
-        self._brand_text_widget = brand_text_widget
-        brand_text = QVBoxLayout(brand_text_widget)
-        brand_text.setContentsMargins(0, 0, 0, 0)
-        brand_text.setSpacing(2)
-        subtitle_label = QLabel(
-            "Timetable Administration &\nValidation Intelligent Organizer"
-        )
-        subtitle_label.setObjectName("BrandSubtitle")
-        subtitle_label.setWordWrap(True)
-        brand_text.addWidget(subtitle_label)
-
-        brand_row.addWidget(brand_text_widget, 1)
+        self._brand_text_widget = None
         toggle_button = QPushButton()
         self._sidebar_toggle_button = toggle_button
         toggle_button.setObjectName("SidebarToggle")
@@ -191,6 +180,7 @@ class MainWindow(QMainWindow):
         self._nav_list.setIndentation(16)
         self._nav_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._nav_list.viewport().installEventFilter(self)
 
         dashboard_item = QTreeWidgetItem(["Dashboard"])
         self._set_navigation_item_icon(
@@ -351,16 +341,19 @@ class MainWindow(QMainWindow):
             painter.drawEllipse(7, 2, 6, 6)
             painter.drawArc(3, 9, 14, 11, 0, 180 * 16)
         elif kind == "gear":
-            painter.drawEllipse(6, 6, 8, 8)
-            painter.drawEllipse(9, 9, 2, 2)
-            painter.drawLine(10, 1, 10, 5)
-            painter.drawLine(10, 15, 10, 19)
-            painter.drawLine(1, 10, 5, 10)
-            painter.drawLine(15, 10, 19, 10)
-            painter.drawLine(3, 3, 6, 6)
-            painter.drawLine(14, 14, 17, 17)
-            painter.drawLine(3, 17, 6, 14)
-            painter.drawLine(14, 6, 17, 3)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor("#ff1010"))
+            painter.drawEllipse(3, 3, 14, 14)
+            painter.save()
+            painter.translate(10, 10)
+            for angle in range(0, 360, 45):
+                painter.save()
+                painter.rotate(angle)
+                painter.drawRoundedRect(-2.2, -10, 4.4, 6, 0.8, 0.8)
+                painter.restore()
+            painter.restore()
+            painter.setBrush(QColor("#16243b"))
+            painter.drawEllipse(7, 7, 6, 6)
         elif kind == "printer":
             painter.drawRect(5, 1, 10, 5)
             painter.drawRect(2, 6, 16, 9)
@@ -455,7 +448,6 @@ class MainWindow(QMainWindow):
             self._sidebar is None
             or self._sidebar_layout is None
             or self._brand_row is None
-            or self._brand_text_widget is None
         ):
             return
 
@@ -476,8 +468,7 @@ class MainWindow(QMainWindow):
             6 if collapsed else 14,
             8 if collapsed else 18,
         )
-        self._brand_row.setSpacing(0 if collapsed else 10)
-        self._brand_text_widget.setVisible(not collapsed)
+        self._brand_row.setSpacing(0)
         self._nav_list.setIndentation(0 if collapsed else 16)
         for index in range(self._nav_list.topLevelItemCount()):
             item = self._nav_list.topLevelItem(index)
@@ -497,6 +488,23 @@ class MainWindow(QMainWindow):
             tooltip = "Expand sidebar" if collapsed else "Minimize sidebar"
             self._sidebar_toggle_button.setToolTip(tooltip)
             self._sidebar_toggle_button.setAccessibleName(tooltip)
+
+    def eventFilter(self, watched: object, event: object) -> bool:
+        """Show tooltips only over navigation icons while the sidebar is collapsed."""
+        if watched is self._nav_list.viewport() and event.type() == QEvent.Type.ToolTip:
+            if self._sidebar_collapsed and isinstance(event, QHelpEvent):
+                item = self._nav_list.itemAt(event.pos())
+                if item is not None:
+                    rect = self._nav_list.visualItemRect(item)
+                    icon_center = rect.left() + rect.width() // 2
+                    if abs(event.pos().x() - icon_center) <= 14:
+                        label = item.data(0, Qt.ItemDataRole.UserRole + 1)
+                        if label:
+                            QToolTip.showText(event.globalPos(), str(label), self._nav_list)
+                            return True
+            QToolTip.hideText()
+            return True
+        return super().eventFilter(watched, event)
 
     def _build_overview_page(self) -> QWidget:
         page = QWidget()
