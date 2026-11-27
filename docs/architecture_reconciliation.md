@@ -22,12 +22,16 @@ This document is not authorization to change application code, database schema, 
 
 The agreed direction is:
 
-1. A `.tavio` workspace will be a **native SQLite database file** with the `.tavio` extension.
-2. The school logo and other workspace-owned assets must be stored inside that workspace database, so moving or opening a workspace on another computer does not depend on a shared machine-local logo path.
-3. TAVIO will introduce a workspace lifecycle/context layer to manage the active workspace, opening and switching, persistence, autosave, backup, recovery, and validation.
-4. Existing SQLite repositories and services should be retained where practical. The project should evolve from its current SQLite foundation; a wholesale database or application rewrite is not the goal.
-5. Workspace data must remain isolated. A failed OPEN AS or workspace switch must leave the currently active workspace usable and unchanged.
-6. These decisions define the architecture direction only. They do not approve a specific migration, new table definition, code change, or implementation task.
+1. A `.tavio` workspace will be a **single native SQLite database file** with the `.tavio` extension. It will not use a ZIP layer or another packaging format and should remain inspectable with standard SQLite software.
+2. The `.tavio` file is portable: it can be moved and opened on another Windows computer with TAVIO installed, without depending on the original computer or an internet connection.
+3. The school logo and other workspace-owned assets must be stored inside that workspace database, so moving or opening a workspace on another computer does not depend on a shared machine-local asset path.
+4. Each workspace has a unique, persistent internal workspace ID stored in the database. The ID remains unchanged when the file is moved or renamed. A newly created workspace receives a new ID, even when selected school information is copied from another workspace.
+5. TAVIO will introduce a `WorkspaceManager` and active `WorkspaceContext` lifecycle/context layer. The manager owns workspace creation, opening, switching, and safe activation; the context binds the active database manager, repositories, services, file path, and workspace-owned assets together. Repositories and services are rebuilt for the new context when switching. If opening a candidate workspace fails, the current context remains active and intact.
+6. TAVIO follows an **offline-first, independent-computer model**. It does not detect whether the same workspace or another copy is open on another computer, does not use cross-computer file locks, and does not provide cross-computer synchronization, conflict detection, or merge. Users manage file transfer and decide which workspace copy is authoritative/latest.
+7. Recovery data is computer-local and separate from the portable workspace file. Each computer maintains its own recovery state for a workspace, matched using the persistent workspace ID. A missing local recovery file must never prevent opening a valid `.tavio` file.
+8. Existing SQLite repositories and services should be retained where practical. The project should evolve from its current SQLite foundation; a wholesale database or application rewrite is not the goal.
+9. Workspace data must remain isolated. A failed OPEN AS or workspace switch must leave the currently active workspace usable and unchanged.
+10. These decisions define the architecture direction only. They do not approve a specific migration, new table definition, code change, or implementation task.
 
 ## 3. Findings in the current repository
 
@@ -158,6 +162,27 @@ Before adding a table or migration, decide:
 
 Do not leave the authoritative logo in a shared application-local folder after workspace embedding is implemented.
 
+## 5.1 Portable workspace identity and computer-local recovery
+
+Every workspace must contain a unique internal workspace ID. The ID is generated when the workspace is created and remains stable through SAVE, SAVE AS, file movement, and file renaming. A genuinely new workspace receives a new ID.
+
+The recovery mechanism is local to each computer:
+- The portable `.tavio` file contains the authoritative workspace data and workspace ID.
+- Each computer keeps its own recovery data in an application-local recovery area, keyed by workspace ID. Recovery data is not required to travel with the `.tavio` file.
+- The local recovery record also carries the workspace ID. TAVIO must verify the ID before offering or applying recovery; a mismatch blocks recovery.
+- When a `.tavio` file is opened on a computer that has no local recovery record for that workspace ID, TAVIO creates a new local recovery context after successfully validating/opening the workspace. The source `.tavio` is not modified merely by opening it.
+- The absence of a local recovery file must not block OPEN AS.
+
+The exact local recovery file layout and naming remain implementation details, but the design must not put the only recovery copy beside a portable file on removable or shared storage in a way that makes recovery depend on that location.
+
+## 5.2 Offline-first and multiple computers
+
+TAVIO does not coordinate workspace access between computers. It does not check whether a file or another copy is open elsewhere, does not create cross-computer locks, and does not synchronize or merge data.
+
+Users may independently open a `.tavio` file on different computers. Each computer works with its own local state and recovery data. When users transfer workspace files by USB, network storage, or cloud storage, they are responsible for choosing and managing the latest authoritative copy. TAVIO does not resolve differences between copies.
+
+This is not a collaborative editing or cloud-sync model. Avoid introducing network services, mandatory internet access, or cross-computer coordination into the workspace lifecycle.
+
 ## 6. Safe SQLite persistence and recovery
 
 The existing workspace data-file decisions remain authoritative for user-facing behavior:
@@ -189,15 +214,15 @@ Validation must happen before replacing a valid main or recovery file. Exact val
 
 ### 6.3 Journal mode decision
 
-A single-file portable workspace may be easier to manage with SQLite rollback-journal mode (`DELETE`) than WAL, provided concurrency and performance requirements are satisfied.
+A single-file portable workspace may be easier to manage with SQLite rollback-journal mode (`DELETE`) than WAL, provided the application's local database access and performance requirements are satisfied. Cross-computer simultaneous editing and coordination are not product requirements.
 
 This is a candidate decision for detailed design, not an instruction to change the current database connection immediately. Compare:
 - sidecar-file behavior;
-- concurrent read/write needs;
+- local read/write needs;
 - checkpoint and shutdown behavior;
 - save/backup reliability;
 - performance on typical and large school workspaces;
-- behavior on USB and network-backed storage.
+- behavior on USB and network-backed storage, while keeping the offline-first/no-sync product boundary clear.
 
 ## 7. Migration and compatibility boundaries
 
@@ -222,10 +247,10 @@ Before implementation, prepare and review designs for:
 5. Embedded asset schema and logo import/access lifecycle.
 6. Startup and last-opened workspace behavior.
 7. NEW TIMETABLE creation and copying only SCHOOL PROFILE, SCHOOL ADMINISTRATORS, and SCHEDULE SIGNATORIES.
-8. Autosave for a workspace that has not yet been saved to a user-selected path.
+8. Computer-local recovery for a workspace that has not yet been saved to a user-selected path, and creation of a fresh local recovery context when a portable workspace is opened on another computer.
 9. Separation of whole-workspace recovery autosave from existing timetable draft autosave.
-10. SAVE, SAVE AS, recovery, migration, and interrupted replacement failure handling.
-11. Test plan for crash, power loss, disk full, permission errors, file locks, USB/network storage, invalid files, and multiple workspace switching.
+10. SAVE, SAVE AS, computer-local recovery, migration, and interrupted replacement failure handling.
+11. Test plan for crash, power loss, disk full, permission errors, USB/network/removable storage, invalid files, local recovery identity checks, and multiple workspace switching. Do not add cross-computer locking or synchronization tests as product requirements.
 
 ## 9. Explicit implementation boundaries
 
