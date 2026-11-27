@@ -392,11 +392,15 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
         assert school_setup_item.childCount() == 3
-        assert not window._nav_list.topLevelItem(0).icon(0).isNull()
-        assert not school_setup_item.icon(0).isNull()
         assert all(
-            not school_setup_item.child(index).icon(0).isNull()
-            for index in range(school_setup_item.childCount())
+            not window._nav_list.topLevelItem(index).icon(0).isNull()
+            for index in range(window._nav_list.topLevelItemCount())
+        )
+        assert all(
+            not group.child(child_index).icon(0).isNull()
+            for index in range(window._nav_list.topLevelItemCount())
+            for group in [window._nav_list.topLevelItem(index)]
+            for child_index in range(group.childCount())
         )
 
         assert school_setup_item.isExpanded()
@@ -445,7 +449,24 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._sidebar_toggle_button.toolTip() == "Expand sidebar"
         assert not window._sidebar_toggle_button.icon().isNull()
         assert window._nav_list.topLevelItem(0).text(0) == "Dashboard"
+        assert all(
+            not window._nav_list.topLevelItem(index).isExpanded()
+            for index in range(window._nav_list.topLevelItemCount())
+            if window._nav_list.topLevelItem(index).childCount() > 0
+        )
 
+        master_data_item = window._nav_list.topLevelItem(3)
+        window._on_navigation_item_clicked(master_data_item, 0)
+        assert window._sidebar_collapsed is False
+        assert master_data_item.isExpanded()
+
+        window._sidebar_toggle_button.click()
+        assert window._sidebar_collapsed is True
+        assert all(
+            not window._nav_list.topLevelItem(index).isExpanded()
+            for index in range(window._nav_list.topLevelItemCount())
+            if window._nav_list.topLevelItem(index).childCount() > 0
+        )
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is False
         assert 286 <= window._sidebar.width() <= 340
