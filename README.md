@@ -12,7 +12,7 @@ The authoritative application codebase is the Python/PySide6 project in [tavio/]
 
 **Overall: Active development — foundational infrastructure is in place; core school workflows are still being developed.**
 
-TAVIO has progressed beyond the original Phase 0 skeleton. The SQLite database layer and versioned migrations are implemented, the main navigation structure is in place, and several school-configuration screens are functional. The portable workspace lifecycle, complete school-configuration workflows, full Master Data workflows, timetable generation and editing, relief management, and final reporting workflows are not yet complete.
+TAVIO has progressed beyond the original Phase 0 skeleton. The SQLite database layer and versioned migrations are implemented, the main navigation structure has been locally verified, and several school-configuration screens are functional. The portable workspace lifecycle, complete school-configuration workflows, full Master Data workflows, timetable generation and editing, relief management, and final reporting workflows are not yet complete.
 
 ### Implemented
 
@@ -20,7 +20,7 @@ TAVIO has progressed beyond the original Phase 0 skeleton. The SQLite database l
 - PySide6 application shell, collapsible sidebar navigation, startup diagnostics, and single-instance protection.
 - Main navigation structure covering Dashboard, File, School Setup, Master Data, Timetable, Manual Editor, Absences & Relief, Reports, and Settings.
 - School Setup navigation includes Academic Year, Bell & Break Times, School Sessions, School Profile, School Administrators, and Schedule Signatories. The three newer setup entries are navigation placeholders; their configuration workflows are not yet implemented.
-- Sidebar presentation includes expanded/collapsed modes, custom navigation icons, Dashboard placement, and the agreed submenu order.
+- Sidebar presentation includes expanded/collapsed modes, custom navigation icons, Dashboard placement, and the agreed submenu order. Automated tests and manual application testing have confirmed the navigation behaviour.
 - Local application configuration, resource resolution, and rotating UTF-8 logging.
 - SQLite database infrastructure, schema management, and versioned migrations through migration version 4.
 - Database migration for Class Teacher linkage: nullable classes.class_teacher_id references teachers(id) with ON DELETE RESTRICT.
