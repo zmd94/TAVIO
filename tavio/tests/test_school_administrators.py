@@ -463,7 +463,7 @@ def test_main_window_navigates_to_school_administrators_and_reloads(
     try:
         school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
-        administrators_item = school_setup_item.child(1)
+        administrators_item = school_setup_item.child(4)
         assert administrators_item.text(0) == "School Administrators"
         assert (
             administrators_item.data(0, Qt.ItemDataRole.UserRole) == "school_administrators"
