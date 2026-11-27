@@ -407,6 +407,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._sidebar_toggle_button.text() == ""
         assert not window._sidebar_toggle_button.icon().isNull()
         assert window._nav_list.rootIsDecorated() is False
+        assert window._nav_list.indentation() == 0
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is True
         assert window._sidebar.width() == 84
