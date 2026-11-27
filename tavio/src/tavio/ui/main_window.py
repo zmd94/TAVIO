@@ -44,7 +44,7 @@ from tavio.ui.school_profile_page import SchoolProfilePage
 logger = logging.getLogger(__name__)
 
 NAVIGATION_GROUPS: tuple[tuple[str, str, str, tuple[tuple[str, str, str], ...]], ...] = (
-    ("Workspace", "Phase 0", "Workspace file lifecycle.", (("New", "workspace_new", "Create a new school workspace."), ("Open", "workspace_open", "Open an existing school workspace."), ("Save", "workspace_save", "Save changes to the active workspace."), ("Save As", "workspace_save_as", "Save the active workspace to another file."), ("Exit", "workspace_exit", "Close TAVIO safely."))),
+    ("File", "Phase 0", "Workspace file lifecycle.", (("New", "workspace_new", "Create a new school workspace."), ("Open", "workspace_open", "Open an existing school workspace."), ("Save", "workspace_save", "Save changes to the active workspace."), ("Save As", "workspace_save_as", "Save the active workspace to another file."), ("Exit", "workspace_exit", "Close TAVIO safely."))),
     ("School Setup", "Phase 1", "School identity and authorized schedule signatories.", (("School Profile", "school_profile", ""), ("School Administrators", "school_administrators", ""), ("Schedule Signatories", "schedule_signatories", ""))),
     ("Master Data", "Phase 2", "Manage teachers, classes, class teachers, subjects, special rooms, and teaching distribution.", (("Teachers", "master_teachers", "Manage teacher records."), ("Classes", "master_classes", "Manage class records."), ("Class Teacher", "master_class_teacher", "Assign class teachers to classes."), ("Subjects", "master_subjects", "Manage subject records."), ("Special Rooms", "master_special_rooms", "Manage special teaching rooms."), ("Teaching Distribution", "master_teaching_distribution", "Configure teaching distribution."))),
     ("Timetable", "Phase 3", "Generate, version, and view school timetables.", (("Generate Timetable", "timetable_generate", "Generate a timetable using configured constraints."), ("Timetable Versions", "timetable_versions", "Review and manage timetable versions."), ("View Timetable", "timetable_view", "View the selected timetable."))),
@@ -274,7 +274,7 @@ class MainWindow(QMainWindow):
     def _navigation_group_icon(self, title: str) -> QStyle.StandardPixmap:
         """Return a distinct semantic icon for each primary navigation group."""
         icons = {
-            "Workspace": QStyle.StandardPixmap.SP_DirOpenIcon,
+            "File": QStyle.StandardPixmap.SP_DirOpenIcon,
             "School Setup": QStyle.StandardPixmap.SP_DirHomeIcon,
             "Master Data": QStyle.StandardPixmap.SP_FileDialogDetailedView,
             "Timetable": QStyle.StandardPixmap.SP_FileDialogListView,
@@ -334,11 +334,13 @@ class MainWindow(QMainWindow):
         if title == "School Setup":
             item.setIcon(0, self._create_semantic_navigation_icon("school"))
         elif title == "Settings":
-            item.setIcon(0, self._create_semantic_navigation_icon("gear"))
+            item.setIcon(0, self._create_semantic_navigation_icon("wrench"))
         elif title == "Reports":
             item.setIcon(0, self._create_semantic_navigation_icon("printer"))
         elif route == "master_teachers":
             item.setIcon(0, self._create_semantic_navigation_icon("person"))
+        elif route == "workspace_save_as":
+            item.setIcon(0, self._create_colored_save_icon())
         elif route == "workspace_exit":
             item.setIcon(0, self._create_colored_exit_icon())
         else:
@@ -387,7 +389,34 @@ class MainWindow(QMainWindow):
             painter.drawRect(5, 12, 10, 7)
             painter.drawLine(7, 15, 13, 15)
             painter.drawLine(7, 17, 13, 17)
+        elif kind == "wrench":
+            painter.drawArc(2, 1, 12, 12, 35 * 16, 250 * 16)
+            painter.drawLine(10, 10, 17, 17)
+            painter.drawLine(14, 14, 18, 10)
+            painter.drawLine(17, 17, 13, 19)
 
+        painter.end()
+        return QIcon(pixmap)
+
+    def _create_colored_save_icon(self) -> QIcon:
+        """Create a green Save As floppy-disk icon distinct from regular Save."""
+        pixmap = QPixmap(20, 20)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(
+            QPen(
+                QColor("#55c58a"),
+                1.8,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+        painter.drawRect(2, 2, 16, 16)
+        painter.drawRect(5, 2, 8, 5)
+        painter.drawRect(5, 11, 10, 7)
+        painter.drawLine(7, 14, 13, 14)
         painter.end()
         return QIcon(pixmap)
 
