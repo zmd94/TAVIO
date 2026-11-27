@@ -394,7 +394,25 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._dashboard_button.isVisible()
         school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
-        assert school_setup_item.childCount() == 3
+        assert school_setup_item.childCount() == 6
+        assert [
+            school_setup_item.child(index).text(0)
+            for index in range(school_setup_item.childCount())
+        ] == [
+            "School Profile",
+            "School Administrators",
+            "Schedule Signatories",
+            "Academic Year",
+            "School Sessions",
+            "Bell & Break Times",
+        ]
+        assert school_setup_item.child(3).data(0, Qt.ItemDataRole.UserRole) == "school_academic_year"
+        assert school_setup_item.child(4).data(0, Qt.ItemDataRole.UserRole) == "school_sessions"
+        assert school_setup_item.child(5).data(0, Qt.ItemDataRole.UserRole) == "school_bell_break_times"
+        assert all(
+            not school_setup_item.child(index).icon(0).isNull()
+            for index in (3, 4, 5)
+        )
         assert all(
             not window._nav_list.topLevelItem(index).icon(0).isNull()
             for index in range(window._nav_list.topLevelItemCount())
