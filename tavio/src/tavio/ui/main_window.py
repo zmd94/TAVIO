@@ -93,7 +93,10 @@ class MainWindow(QMainWindow):
 
         self._nav_list = QTreeWidget()
         self._sidebar: QFrame | None = None
+        self._sidebar_layout: QVBoxLayout | None = None
+        self._brand_row: QHBoxLayout | None = None
         self._brand_icon_label: QLabel | None = None
+        self._brand_icon_pixmap: QPixmap | None = None
         self._brand_text_widget: QWidget | None = None
         self._sidebar_toggle_button: QPushButton | None = None
         self._sidebar_collapsed = False
@@ -137,10 +140,12 @@ class MainWindow(QMainWindow):
         sidebar.setObjectName("Sidebar")
         sidebar.setFixedWidth(250)
         sidebar_layout = QVBoxLayout(sidebar)
+        self._sidebar_layout = sidebar_layout
         sidebar_layout.setContentsMargins(14, 18, 14, 18)
         sidebar_layout.setSpacing(12)
 
         brand_row = QHBoxLayout()
+        self._brand_row = brand_row
         brand_row.setSpacing(10)
 
         brand_icon = QLabel()
@@ -148,6 +153,7 @@ class MainWindow(QMainWindow):
         brand_icon_path = get_asset_path("TAVIO_icon.png")
         if brand_icon_path.is_file():
             pixmap = QPixmap(str(brand_icon_path))
+            self._brand_icon_pixmap = pixmap
             brand_icon.setPixmap(
                 pixmap.scaled(
                     42,
@@ -262,11 +268,23 @@ class MainWindow(QMainWindow):
 
     def _set_sidebar_collapsed(self, collapsed: bool) -> None:
         """Update sidebar width and navigation presentation without changing routes."""
-        if self._sidebar is None or self._brand_text_widget is None:
+        if (
+            self._sidebar is None
+            or self._sidebar_layout is None
+            or self._brand_row is None
+            or self._brand_text_widget is None
+        ):
             return
 
         self._sidebar_collapsed = collapsed
         self._sidebar.setFixedWidth(84 if collapsed else 250)
+        self._sidebar_layout.setContentsMargins(
+            6 if collapsed else 14,
+            8 if collapsed else 18,
+            6 if collapsed else 14,
+            8 if collapsed else 18,
+        )
+        self._brand_row.setSpacing(4 if collapsed else 10)
         self._brand_text_widget.setVisible(not collapsed)
         self._nav_list.setIndentation(0 if collapsed else 18)
         self._nav_list.setRootIsDecorated(not collapsed)
@@ -275,6 +293,16 @@ class MainWindow(QMainWindow):
         if self._brand_icon_label is not None:
             icon_size = 34 if collapsed else 46
             self._brand_icon_label.setFixedSize(icon_size, icon_size)
+            if self._brand_icon_pixmap is not None:
+                pixmap_size = icon_size - 4
+                self._brand_icon_label.setPixmap(
+                    self._brand_icon_pixmap.scaled(
+                        pixmap_size,
+                        pixmap_size,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
 
         if self._sidebar_toggle_button is not None:
             self._sidebar_toggle_button.setText("›" if collapsed else "‹")
