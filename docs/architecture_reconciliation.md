@@ -4,7 +4,7 @@
 **Repository:** `zmd94/TAVIO`  
 **Branch:** `main`  
 **Status:** Agreed architecture direction; detailed design and implementation still require review and explicit authorization  
-**Related specification:** [Workspace and Data File Management Decisions](data_file_management.md)
+**Related specification:** [Workspace and Data Management Decisions](data_management.md)
 
 ## 1. Purpose
 
@@ -69,30 +69,21 @@ This creates a workspace-isolation problem: separate workspaces can point to or 
 
 ### 3.5 Existing migrations and schema version
 
-The current migration chain contains schema migrations v1, v2, and v3. Migration v3 adds the nullable `classes.class_teacher_id` foreign key to `teachers(id)` with `ON DELETE RESTRICT`.
+The current migration chain contains schema migrations v1 through v4. Migration v3 adds the nullable `classes.class_teacher_id` foreign key to `teachers(id)` with `ON DELETE RESTRICT`. Migration v4 removes the unused legacy timetable-autosave table and its scope-validation triggers, and deletes the obsolete `autosave_interval_minutes` setting.
 
-The current migration system uses SQLite `PRAGMA user_version` to track the database schema version.
+The migration system uses SQLite `PRAGMA user_version` to track the database schema version. The current supported schema version is 4.
 
 **Design implication:** keep schema versioning distinct from the TAVIO application/package compatibility version. A newer TAVIO application version and a newer SQLite schema are related but are not interchangeable concepts. Validate package/application compatibility before attempting migration.
 
 ### 3.6 Legacy timetable autosave schema is superseded by whole-workspace recovery
 
-The current v1 schema creates `timetable_workspace_autosaves`, two associated scope-validation triggers (`trg_twa_base_version_ins` and `trg_twa_base_version_upd`), and an `app_settings` value named `autosave_interval_minutes` seeded to 10 minutes. Repository inspection found no current runtime reads or writes for these objects. The timetable-construction workflow that might have used the draft table has not yet been implemented.
+The v1 schema created `timetable_workspace_autosaves`, two associated scope-validation triggers (`trg_twa_base_version_ins` and `trg_twa_base_version_upd`), and an `app_settings` value named `autosave_interval_minutes` seeded to 10 minutes. Repository inspection found no current runtime reads or writes for these objects. The timetable-construction workflow that might have used the draft table has not yet been implemented.
 
 **Agreed decision:** do not retain a separate timetable-draft autosave mechanism. The single autosave mechanism will be whole-workspace computer-local recovery every 5 minutes, keyed by the persistent workspace ID. It writes recovery data outside the portable `.tavio` database and never updates the main workspace file.
 
-**Agreed migration v4 scope (not implemented):**
-1. Add a new forward-only migration v4; leave historical migrations v1-v3 unchanged.
-2. Drop `trg_twa_base_version_ins` and `trg_twa_base_version_upd`.
-3. Drop `timetable_workspace_autosaves`.
-4. Delete the legacy `app_settings` row `autosave_interval_minutes`.
-5. Preserve all unrelated schema objects and workspace data.
-6. Advance `PRAGMA user_version` to 4 only when the migration succeeds atomically.
-7. Test v3-to-v4 upgrades, fresh initialization to v4, preservation of unrelated data, integrity, idempotence, and full rollback on failure.
+**Migration v4 status: implemented.** The forward-only migration leaves historical migrations v1-v3 unchanged, drops both legacy scope triggers and the `timetable_workspace_autosaves` table, deletes the `autosave_interval_minutes` setting, and advances `PRAGMA user_version` to 4 atomically. Automated migration tests cover the v3-to-v4 upgrade, fresh initialization, preservation of unrelated data, integrity, repeat initialization, and rollback on failure.
 
-The 5-minute interval belongs in application-local configuration, not in `app_settings` or the portable `.tavio` file. This is necessary because recovery is computer-local and may be configured independently on each computer.
-
-Migration v4 is schema cleanup only. It does not implement the new recovery engine.
+The 5-minute interval belongs in application-local configuration, not in `app_settings` or the portable `.tavio` file. Migration v4 is schema cleanup only; it does not implement the new whole-workspace recovery engine.
 
 ## 4. Proposed logical architecture
 
