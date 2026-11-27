@@ -103,6 +103,7 @@ class MainWindow(QMainWindow):
         self._brand_icon_pixmap: QPixmap | None = None
         self._brand_text_widget: QWidget | None = None
         self._sidebar_toggle_button: QPushButton | None = None
+        self._dashboard_button: QPushButton | None = None
         self._sidebar_collapsed = False
         self._page_indexes: dict[str, int] = {}
         self._stack = QStackedWidget()
@@ -152,10 +153,20 @@ class MainWindow(QMainWindow):
 
         brand_row = QHBoxLayout()
         self._brand_row = brand_row
-        brand_row.setSpacing(10)
+        brand_row.setSpacing(8)
 
         self._brand_icon_label = None
         self._brand_icon_pixmap = None
+
+        dashboard_button = QPushButton("Dashboard")
+        self._dashboard_button = dashboard_button
+        dashboard_button.setObjectName("DashboardNavigationButton")
+        dashboard_button.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+        )
+        dashboard_button.setIconSize(QSize(20, 20))
+        dashboard_button.clicked.connect(self._show_dashboard)
+        brand_row.addWidget(dashboard_button, 1)
 
         self._brand_text_widget = None
         toggle_button = QPushButton()
@@ -190,6 +201,7 @@ class MainWindow(QMainWindow):
         dashboard_item.setToolTip(0, "Dashboard")
         dashboard_item.setData(0, Qt.ItemDataRole.UserRole, "dashboard")
         self._nav_list.addTopLevelItem(dashboard_item)
+        dashboard_item.setHidden(True)
         self._page_indexes["dashboard"] = self._stack.addWidget(
             self._build_placeholder_page(
                 "Phase 1",
@@ -239,7 +251,7 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(sidebar)
         root_layout.addWidget(self._stack, 1)
         self.setCentralWidget(root)
-        self._nav_list.setCurrentItem(dashboard_item)
+        self._nav_list.setCurrentItem(None)
 
     def _navigation_group_icon(self, title: str) -> QStyle.StandardPixmap:
         """Return a distinct semantic icon for each primary navigation group."""
@@ -390,6 +402,12 @@ class MainWindow(QMainWindow):
         painter.end()
         return QIcon(pixmap)
 
+    def _show_dashboard(self) -> None:
+        """Show the dashboard from the compact header navigation button."""
+        self._stack.setCurrentIndex(self._page_indexes["dashboard"])
+        self._nav_list.clearSelection()
+        self._nav_list.setCurrentItem(None)
+
     def _toggle_sidebar(self) -> None:
         """Toggle between the full navigation sidebar and its icon-only state."""
         self._set_sidebar_collapsed(not self._sidebar_collapsed)
@@ -468,7 +486,11 @@ class MainWindow(QMainWindow):
             6 if collapsed else 14,
             6 if collapsed else 18,
         )
-        self._brand_row.setSpacing(0)
+        self._brand_row.setSpacing(0 if collapsed else 8)
+        dashboard_item = self._nav_list.topLevelItem(0)
+        dashboard_item.setHidden(not collapsed)
+        if self._dashboard_button is not None:
+            self._dashboard_button.setVisible(not collapsed)
         self._nav_list.setIndentation(0 if collapsed else 16)
         for index in range(self._nav_list.topLevelItemCount()):
             item = self._nav_list.topLevelItem(index)
