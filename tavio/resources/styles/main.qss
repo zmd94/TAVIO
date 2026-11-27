@@ -22,7 +22,7 @@ QMainWindow {
     margin-bottom: 8px;
 }
 
-#NavigationList {
+#NavigationTree {
     background-color: transparent;
     border: none;
     color: #dbe6f5;
@@ -30,19 +30,31 @@ QMainWindow {
     outline: none;
 }
 
-#NavigationList::item {
+#NavigationTree::item {
     padding: 10px 12px;
     border-radius: 6px;
     margin-bottom: 4px;
 }
 
-#NavigationList::item:hover {
+#NavigationTree::item:hover {
     background-color: #213556;
 }
 
-#NavigationList::item:selected {
+#NavigationTree::item:selected {
     background-color: #2f5597;
     color: #ffffff;
+    font-weight: 600;
+}
+
+#NavigationTree::branch {
+    background-color: transparent;
+}
+
+#NavigationTree::item {
+    min-height: 20px;
+}
+
+#NavigationTree::item:has-children {
     font-weight: 600;
 }
 
