@@ -292,7 +292,7 @@ class MainWindow(QMainWindow):
             "workspace_new": QStyle.StandardPixmap.SP_FileDialogNewFolder,
             "workspace_open": QStyle.StandardPixmap.SP_DialogOpenButton,
             "workspace_save": QStyle.StandardPixmap.SP_DialogSaveButton,
-            "workspace_save_as": QStyle.StandardPixmap.SP_DialogSaveAllButton,
+            "workspace_save_as": QStyle.StandardPixmap.SP_DialogSaveButton,
             "workspace_exit": QStyle.StandardPixmap.SP_DialogCloseButton,
             "school_profile": QStyle.StandardPixmap.SP_FileDialogInfoView,
             "school_administrators": QStyle.StandardPixmap.SP_DirHomeIcon,
