@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -185,7 +185,7 @@ class MainWindow(QMainWindow):
         toggle_button.setObjectName("SidebarToggle")
         toggle_button.setFixedSize(30, 30)
         toggle_button.setIconSize(QSize(16, 16))
-        toggle_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowLeft))
+        toggle_button.setIcon(self._create_sidebar_arrow_icon(collapsed=False))
         toggle_button.setToolTip("Minimize sidebar")
         toggle_button.setAccessibleName("Minimize sidebar")
         toggle_button.clicked.connect(self._toggle_sidebar)
@@ -199,7 +199,7 @@ class MainWindow(QMainWindow):
         self._nav_list.setRootIsDecorated(False)
         self._nav_list.setItemsExpandable(True)
         self._nav_list.setExpandsOnDoubleClick(False)
-        self._nav_list.setIndentation(18)
+        self._nav_list.setIndentation(0)
 
         overview_item = QTreeWidgetItem(["System Overview (Phase 0)"])
         self._set_navigation_item_icon(overview_item, QStyle.StandardPixmap.SP_ComputerIcon)
@@ -270,6 +270,30 @@ class MainWindow(QMainWindow):
         """Toggle between the full navigation sidebar and its icon-only state."""
         self._set_sidebar_collapsed(not self._sidebar_collapsed)
 
+    def _create_sidebar_arrow_icon(self, *, collapsed: bool) -> QIcon:
+        """Create a restrained chevron icon independent of platform icon themes."""
+        pixmap = QPixmap(18, 18)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(
+            QPen(
+                QColor("#dbe6f5"),
+                2.2,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+        if collapsed:
+            painter.drawLine(6, 3, 12, 9)
+            painter.drawLine(12, 9, 6, 15)
+        else:
+            painter.drawLine(12, 3, 6, 9)
+            painter.drawLine(6, 9, 12, 15)
+        painter.end()
+        return QIcon(pixmap)
+
     def _set_sidebar_collapsed(self, collapsed: bool) -> None:
         """Update sidebar width and navigation presentation without changing routes."""
         if (
@@ -290,7 +314,7 @@ class MainWindow(QMainWindow):
         )
         self._brand_row.setSpacing(4 if collapsed else 10)
         self._brand_text_widget.setVisible(not collapsed)
-        self._nav_list.setIndentation(0 if collapsed else 18)
+        self._nav_list.setIndentation(0)
         self._nav_list.setRootIsDecorated(not collapsed)
         self._nav_list.setStyleSheet("color: transparent;" if collapsed else "")
 
@@ -309,12 +333,9 @@ class MainWindow(QMainWindow):
                 )
 
         if self._sidebar_toggle_button is not None:
-            arrow = (
-                QStyle.StandardPixmap.SP_ArrowRight
-                if collapsed
-                else QStyle.StandardPixmap.SP_ArrowLeft
+            self._sidebar_toggle_button.setIcon(
+                self._create_sidebar_arrow_icon(collapsed=collapsed)
             )
-            self._sidebar_toggle_button.setIcon(self.style().standardIcon(arrow))
             tooltip = "Expand sidebar" if collapsed else "Minimize sidebar"
             self._sidebar_toggle_button.setToolTip(tooltip)
             self._sidebar_toggle_button.setAccessibleName(tooltip)
