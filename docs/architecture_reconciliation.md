@@ -75,13 +75,24 @@ The current migration system uses SQLite `PRAGMA user_version` to track the data
 
 **Design implication:** keep schema versioning distinct from the TAVIO application/package compatibility version. A newer TAVIO application version and a newer SQLite schema are related but are not interchangeable concepts. Validate package/application compatibility before attempting migration.
 
-### 3.6 Existing timetable autosave setting needs separate treatment
+### 3.6 Legacy timetable autosave schema is superseded by whole-workspace recovery
 
-The current schema includes `timetable_workspace_autosaves` and an `app_settings` autosave interval setting seeded as 10 minutes in the reviewed code.
+The current v1 schema creates `timetable_workspace_autosaves`, two associated scope-validation triggers (`trg_twa_base_version_ins` and `trg_twa_base_version_upd`), and an `app_settings` value named `autosave_interval_minutes` seeded to 10 minutes. Repository inspection found no current runtime reads or writes for these objects. The timetable-construction workflow that might have used the draft table has not yet been implemented.
 
-The agreed workspace-file specification separately requires whole-workspace recovery autosave every 5 minutes to the associated `.bak` file.
+**Agreed decision:** do not retain a separate timetable-draft autosave mechanism. The single autosave mechanism will be whole-workspace computer-local recovery every 5 minutes, keyed by the persistent workspace ID. It writes recovery data outside the portable `.tavio` database and never updates the main workspace file.
 
-**Design implication:** do not assume these are the same feature. Inspect all reads/writes and user-facing behavior of `timetable_workspace_autosaves` and the 10-minute setting before making changes. Preserve timetable-draft autosave behavior unless a separate reviewed decision explicitly changes it. The whole-workspace `.bak` recovery process must have its own clearly defined responsibility and interval.
+**Agreed migration v4 scope (not implemented):**
+1. Add a new forward-only migration v4; leave historical migrations v1-v3 unchanged.
+2. Drop `trg_twa_base_version_ins` and `trg_twa_base_version_upd`.
+3. Drop `timetable_workspace_autosaves`.
+4. Delete the legacy `app_settings` row `autosave_interval_minutes`.
+5. Preserve all unrelated schema objects and workspace data.
+6. Advance `PRAGMA user_version` to 4 only when the migration succeeds atomically.
+7. Test v3-to-v4 upgrades, fresh initialization to v4, preservation of unrelated data, integrity, idempotence, and full rollback on failure.
+
+The 5-minute interval belongs in application-local configuration, not in `app_settings` or the portable `.tavio` file. This is necessary because recovery is computer-local and may be configured independently on each computer.
+
+Migration v4 is schema cleanup only. It does not implement the new recovery engine.
 
 ## 4. Proposed logical architecture
 
@@ -248,9 +259,19 @@ Before implementation, prepare and review designs for:
 6. Startup and last-opened workspace behavior.
 7. NEW TIMETABLE creation and copying only SCHOOL PROFILE, SCHOOL ADMINISTRATORS, and SCHEDULE SIGNATORIES.
 8. Computer-local recovery for a workspace that has not yet been saved to a user-selected path, and creation of a fresh local recovery context when a portable workspace is opened on another computer.
-9. Separation of whole-workspace recovery autosave from existing timetable draft autosave.
+9. Removal of the legacy timetable-draft autosave schema and separation of the single whole-workspace recovery mechanism from portable workspace data.
 10. SAVE, SAVE AS, computer-local recovery, migration, and interrupted replacement failure handling.
 11. Test plan for crash, power loss, disk full, permission errors, USB/network/removable storage, invalid files, local recovery identity checks, and multiple workspace switching. Do not add cross-computer locking or synchronization tests as product requirements.
+
+
+
+### 8.1 Migration v4 — legacy autosave schema cleanup
+
+The migration v4 decision is recorded in [Workspace and Data File Management Decisions](data_file_management.md#17-existing-timetable-autosave-schema-cleanup--planned-migration-v4).
+
+The migration is limited to removing the unused legacy timetable autosave table, its two validation triggers, and the old 10-minute `app_settings` entry. The whole-workspace recovery interval is 5 minutes and is held in application-local configuration, not in the workspace database. Historical migrations remain immutable.
+
+This is an approved design direction, not permission to edit application code or execute the migration. Implementation must be separately authorized after the migration and recovery designs are reviewed.
 
 ## 9. Explicit implementation boundaries
 
