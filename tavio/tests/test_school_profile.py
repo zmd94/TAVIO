@@ -820,7 +820,7 @@ def test_main_window_navigates_to_school_profile_and_reloads(
     try:
         school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
-        profile_item = school_setup_item.child(0)
+        profile_item = school_setup_item.child(3)
         assert profile_item.text(0) == "School Profile"
         assert profile_item.data(0, Qt.ItemDataRole.UserRole) == "school_profile"
         window._nav_list.setCurrentItem(profile_item)
