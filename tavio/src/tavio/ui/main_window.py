@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 NAVIGATION_GROUPS: tuple[tuple[str, str, str, tuple[tuple[str, str, str], ...]], ...] = (
     ("File", "Phase 0", "Workspace file lifecycle.", (("New", "workspace_new", "Create a new school workspace."), ("Open", "workspace_open", "Open an existing school workspace."), ("Save", "workspace_save", "Save changes to the active workspace."), ("Save As", "workspace_save_as", "Save the active workspace to another file."), ("Exit", "workspace_exit", "Close TAVIO safely."))),
-    ("School Setup", "Phase 1", "School identity and authorized schedule signatories.", (("School Profile", "school_profile", ""), ("School Administrators", "school_administrators", ""), ("Schedule Signatories", "schedule_signatories", ""))),
+    ("School Setup", "Phase 1", "School identity, academic calendar, sessions, school timing, and authorized schedule signatories.", (("School Profile", "school_profile", ""), ("School Administrators", "school_administrators", ""), ("Schedule Signatories", "schedule_signatories", ""), ("Academic Year", "school_academic_year", "Configure the active academic year and its date range."), ("School Sessions", "school_sessions", "Configure school sessions such as morning and afternoon."), ("Bell & Break Times", "school_bell_break_times", "Configure teaching periods, bell times, and break periods for each school session."))),
     ("Master Data", "Phase 2", "Manage teachers, classes, class teachers, subjects, special rooms, and teaching distribution.", (("Teachers", "master_teachers", "Manage teacher records."), ("Classes", "master_classes", "Manage class records."), ("Class Teacher", "master_class_teacher", "Assign class teachers to classes."), ("Subjects", "master_subjects", "Manage subject records."), ("Special Rooms", "master_special_rooms", "Manage special teaching rooms."), ("Teaching Distribution", "master_teaching_distribution", "Configure teaching distribution."))),
     ("Timetable", "Phase 3", "Generate, version, and view school timetables.", (("Generate Timetable", "timetable_generate", "Generate a timetable using configured constraints."), ("Timetable Versions", "timetable_versions", "Review and manage timetable versions."), ("View Timetable", "timetable_view", "View the selected timetable."))),
     ("Manual Editor", "Phase 4", "Edit timetable assignments and validate changes before activation.", (("Edit Timetable", "manual_edit", "Edit timetable assignments."), ("Validate Changes", "manual_validate", "Validate timetable changes."))),
@@ -316,6 +316,12 @@ class MainWindow(QMainWindow):
             item.setIcon(0, self._create_semantic_navigation_icon("printer"))
         elif route == "master_teachers":
             item.setIcon(0, self._create_semantic_navigation_icon("person"))
+        elif route == "school_academic_year":
+            item.setIcon(0, self._create_semantic_navigation_icon("calendar"))
+        elif route == "school_sessions":
+            item.setIcon(0, self._create_semantic_navigation_icon("clock"))
+        elif route == "school_bell_break_times":
+            item.setIcon(0, self._create_semantic_navigation_icon("bell"))
         elif route == "workspace_exit":
             item.setIcon(0, self._create_colored_exit_icon())
         else:
@@ -347,6 +353,26 @@ class MainWindow(QMainWindow):
         elif kind == "person":
             painter.drawEllipse(7, 2, 6, 6)
             painter.drawArc(3, 9, 14, 11, 0, 180 * 16)
+        elif kind == "calendar":
+            painter.drawRoundedRect(2, 4, 16, 14, 2, 2)
+            painter.drawLine(2, 8, 18, 8)
+            painter.drawLine(6, 2, 6, 6)
+            painter.drawLine(14, 2, 14, 6)
+            painter.drawPoint(6, 11)
+            painter.drawPoint(10, 11)
+            painter.drawPoint(14, 11)
+            painter.drawPoint(6, 15)
+            painter.drawPoint(10, 15)
+        elif kind == "clock":
+            painter.drawEllipse(2, 2, 16, 16)
+            painter.drawLine(10, 10, 10, 5)
+            painter.drawLine(10, 10, 14, 12)
+        elif kind == "bell":
+            painter.drawArc(4, 2, 12, 14, 0, 180 * 16)
+            painter.drawLine(4, 9, 3, 15)
+            painter.drawLine(3, 15, 17, 15)
+            painter.drawLine(17, 15, 16, 9)
+            painter.drawArc(8, 14, 4, 5, 180 * 16, 180 * 16)
         elif kind == "gear":
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor("#ff1010"))
