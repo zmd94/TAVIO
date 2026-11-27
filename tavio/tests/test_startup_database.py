@@ -405,12 +405,14 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert school_setup_item.isExpanded()
 
         assert window._sidebar is not None
-        assert window._sidebar.width() == 250
+        assert 286 <= window._sidebar.width() <= 340
         assert window._sidebar_toggle_button is not None
         assert window._sidebar_toggle_button.text() == ""
         assert not window._sidebar_toggle_button.icon().isNull()
         assert window._nav_list.rootIsDecorated() is False
-        assert window._nav_list.indentation() == 0
+        assert window._nav_list.indentation() == 16
+        assert window._nav_list.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        assert window._nav_list.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         assert window._stack.count() == 1 + sum(len(group[3]) for group in NAVIGATION_GROUPS)
         dashboard_labels = window._stack.widget(window._page_indexes["dashboard"]).findChildren(
             QLabel
@@ -432,14 +434,20 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         window._nav_list.setCurrentItem(dashboard_item)
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is True
-        assert window._sidebar.width() == 84
+        assert window._sidebar.width() == 76
+        assert window._brand_icon_label is not None
+        assert not window._brand_icon_label.isVisible()
+        assert window._brand_text_widget is not None
+        assert not window._brand_text_widget.isVisible()
+        assert window._nav_list.currentItem() is None
+        assert not window._nav_list.hasFocus()
         assert window._sidebar_toggle_button.toolTip() == "Expand sidebar"
         assert not window._sidebar_toggle_button.icon().isNull()
         assert window._nav_list.topLevelItem(0).text(0) == "Dashboard"
 
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is False
-        assert window._sidebar.width() == 250
+        assert 286 <= window._sidebar.width() <= 340
         assert window._sidebar_toggle_button.toolTip() == "Minimize sidebar"
         assert window._stack.count() == 1 + sum(len(group[3]) for group in NAVIGATION_GROUPS)
         assert window._dep_table.rowCount() == len(initial_report.dependencies)
