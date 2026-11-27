@@ -107,6 +107,20 @@ QPushButton:hover {
     background-color: #24447a;
 }
 
+QPushButton#SidebarToggle {
+    background-color: transparent;
+    color: #dbe6f5;
+    border: 1px solid #405575;
+    border-radius: 6px;
+    padding: 0;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+QPushButton#SidebarToggle:hover {
+    background-color: #213556;
+}
+
 QPushButton:pressed {
     background-color: #1c3560;
 }
