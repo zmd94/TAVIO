@@ -280,7 +280,7 @@ class MainWindow(QMainWindow):
             "Timetable": QStyle.StandardPixmap.SP_FileDialogListView,
             "Manual Editor": QStyle.StandardPixmap.SP_FileDialogContentsView,
             "Absences & Relief": QStyle.StandardPixmap.SP_MessageBoxWarning,
-            "Reports": QStyle.StandardPixmap.SP_PrinterIcon,
+            "Reports": QStyle.StandardPixmap.SP_FileDialogInfoView,
             "Settings": QStyle.StandardPixmap.SP_FileDialogDetailedView,
         }
         return icons.get(title, QStyle.StandardPixmap.SP_DirIcon)
@@ -335,6 +335,8 @@ class MainWindow(QMainWindow):
             item.setIcon(0, self._create_semantic_navigation_icon("school"))
         elif title == "Settings":
             item.setIcon(0, self._create_semantic_navigation_icon("gear"))
+        elif title == "Reports":
+            item.setIcon(0, self._create_semantic_navigation_icon("printer"))
         elif route == "master_teachers":
             item.setIcon(0, self._create_semantic_navigation_icon("person"))
         elif route == "workspace_exit":
@@ -375,10 +377,16 @@ class MainWindow(QMainWindow):
             painter.drawLine(10, 15, 10, 19)
             painter.drawLine(1, 10, 5, 10)
             painter.drawLine(15, 10, 19, 10)
-            painter.drawLine(3.5, 3.5, 6.5, 6.5)
-            painter.drawLine(13.5, 13.5, 16.5, 16.5)
-            painter.drawLine(3.5, 16.5, 6.5, 13.5)
-            painter.drawLine(13.5, 6.5, 16.5, 3.5)
+            painter.drawLine(3, 3, 6, 6)
+            painter.drawLine(14, 14, 17, 17)
+            painter.drawLine(3, 17, 6, 14)
+            painter.drawLine(14, 6, 17, 3)
+        elif kind == "printer":
+            painter.drawRect(5, 1, 10, 5)
+            painter.drawRect(2, 6, 16, 9)
+            painter.drawRect(5, 12, 10, 7)
+            painter.drawLine(7, 15, 13, 15)
+            painter.drawLine(7, 17, 13, 17)
 
         painter.end()
         return QIcon(pixmap)
