@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QStackedWidget,
+    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -91,6 +92,11 @@ class MainWindow(QMainWindow):
             logger.warning("Window icon not found at %s.", icon_path)
 
         self._nav_list = QTreeWidget()
+        self._sidebar: QFrame | None = None
+        self._brand_icon_label: QLabel | None = None
+        self._brand_text_widget: QWidget | None = None
+        self._sidebar_toggle_button: QPushButton | None = None
+        self._sidebar_collapsed = False
         self._page_indexes: dict[str, int] = {}
         self._stack = QStackedWidget()
         self._solver_summary_label = QLabel()
@@ -127,6 +133,7 @@ class MainWindow(QMainWindow):
 
         # Sidebar navigation placeholder
         sidebar = QFrame()
+        self._sidebar = sidebar
         sidebar.setObjectName("Sidebar")
         sidebar.setFixedWidth(250)
         sidebar_layout = QVBoxLayout(sidebar)
@@ -137,6 +144,7 @@ class MainWindow(QMainWindow):
         brand_row.setSpacing(10)
 
         brand_icon = QLabel()
+        self._brand_icon_label = brand_icon
         brand_icon_path = get_asset_path("TAVIO_icon.png")
         if brand_icon_path.is_file():
             pixmap = QPixmap(str(brand_icon_path))
@@ -152,7 +160,10 @@ class MainWindow(QMainWindow):
         else:
             logger.warning("Sidebar brand icon not found at %s.", brand_icon_path)
 
-        brand_text = QVBoxLayout()
+        brand_text_widget = QWidget()
+        self._brand_text_widget = brand_text_widget
+        brand_text = QVBoxLayout(brand_text_widget)
+        brand_text.setContentsMargins(0, 0, 0, 0)
         brand_text.setSpacing(2)
         brand_label = QLabel(APP_NAME)
         brand_label.setObjectName("BrandTitle")
@@ -162,9 +173,18 @@ class MainWindow(QMainWindow):
         brand_text.addWidget(subtitle_label)
 
         brand_row.addWidget(brand_icon, 0, Qt.AlignmentFlag.AlignVCenter)
-        brand_row.addLayout(brand_text, 1)
+        brand_row.addWidget(brand_text_widget, 1)
+        toggle_button = QPushButton("‹")
+        self._sidebar_toggle_button = toggle_button
+        toggle_button.setObjectName("SidebarToggle")
+        toggle_button.setFixedSize(28, 28)
+        toggle_button.setToolTip("Minimize sidebar")
+        toggle_button.setAccessibleName("Minimize sidebar")
+        toggle_button.clicked.connect(self._toggle_sidebar)
+        brand_row.addWidget(toggle_button, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self._nav_list.setObjectName("NavigationTree")
+        self._nav_list.setIconSize(QSize(20, 20))
         self._nav_list.setHeaderHidden(True)
         self._nav_list.setRootIsDecorated(True)
         self._nav_list.setItemsExpandable(True)
@@ -172,18 +192,24 @@ class MainWindow(QMainWindow):
         self._nav_list.setIndentation(18)
 
         overview_item = QTreeWidgetItem(["System Overview (Phase 0)"])
+        self._set_navigation_item_icon(overview_item, QStyle.StandardPixmap.SP_ComputerIcon)
+        overview_item.setToolTip(0, "System Overview (Phase 0)")
         overview_item.setData(0, Qt.ItemDataRole.UserRole, "overview")
         self._nav_list.addTopLevelItem(overview_item)
 
         school_setup_item = QTreeWidgetItem(["School Setup"])
+        self._set_navigation_item_icon(school_setup_item, QStyle.StandardPixmap.SP_DirIcon)
+        school_setup_item.setToolTip(0, "School Setup")
         school_setup_item.setData(0, Qt.ItemDataRole.UserRole, None)
         self._nav_list.addTopLevelItem(school_setup_item)
-        for label, route in (
-            ("School Profile", "school_profile"),
-            ("School Administrators", "school_administrators"),
-            ("Schedule Signatories", "schedule_signatories"),
+        for label, route, icon_name in (
+            ("School Profile", "school_profile", QStyle.StandardPixmap.SP_FileIcon),
+            ("School Administrators", "school_administrators", QStyle.StandardPixmap.SP_DirOpenIcon),
+            ("Schedule Signatories", "schedule_signatories", QStyle.StandardPixmap.SP_FileDialogInfoView),
         ):
             child = QTreeWidgetItem([label])
+            self._set_navigation_item_icon(child, icon_name)
+            child.setToolTip(0, label)
             child.setData(0, Qt.ItemDataRole.UserRole, route)
             school_setup_item.addChild(child)
 
@@ -207,6 +233,8 @@ class MainWindow(QMainWindow):
         for index, (title, description) in enumerate(FUTURE_NAVIGATION_MODULES):
             route = f"future:{index}"
             item = QTreeWidgetItem([title])
+            self._set_navigation_item_icon(item, QStyle.StandardPixmap.SP_FileDialogContentsView)
+            item.setToolTip(0, f"{title}\n{description}")
             item.setData(0, Qt.ItemDataRole.UserRole, route)
             self._nav_list.addTopLevelItem(item)
             self._page_indexes[route] = self._stack.addWidget(
@@ -219,6 +247,40 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
         self._nav_list.setCurrentItem(overview_item)
+
+    def _set_navigation_item_icon(
+        self,
+        item: QTreeWidgetItem,
+        icon_name: QStyle.StandardPixmap,
+    ) -> None:
+        """Apply a platform-native icon to a navigation item."""
+        item.setIcon(0, self.style().standardIcon(icon_name))
+
+    def _toggle_sidebar(self) -> None:
+        """Toggle between the full navigation sidebar and its icon-only state."""
+        self._set_sidebar_collapsed(not self._sidebar_collapsed)
+
+    def _set_sidebar_collapsed(self, collapsed: bool) -> None:
+        """Update sidebar width and navigation presentation without changing routes."""
+        if self._sidebar is None or self._brand_text_widget is None:
+            return
+
+        self._sidebar_collapsed = collapsed
+        self._sidebar.setFixedWidth(84 if collapsed else 250)
+        self._brand_text_widget.setVisible(not collapsed)
+        self._nav_list.setIndentation(0 if collapsed else 18)
+        self._nav_list.setRootIsDecorated(not collapsed)
+        self._nav_list.setStyleSheet("color: transparent;" if collapsed else "")
+
+        if self._brand_icon_label is not None:
+            icon_size = 34 if collapsed else 46
+            self._brand_icon_label.setFixedSize(icon_size, icon_size)
+
+        if self._sidebar_toggle_button is not None:
+            self._sidebar_toggle_button.setText("›" if collapsed else "‹")
+            tooltip = "Expand sidebar" if collapsed else "Minimize sidebar"
+            self._sidebar_toggle_button.setToolTip(tooltip)
+            self._sidebar_toggle_button.setAccessibleName(tooltip)
 
     def _build_overview_page(self) -> QWidget:
         page = QWidget()
