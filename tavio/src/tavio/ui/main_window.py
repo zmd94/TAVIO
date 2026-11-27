@@ -209,7 +209,10 @@ class MainWindow(QMainWindow):
         self._nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         dashboard_item = QTreeWidgetItem(["Dashboard"])
-        self._set_navigation_item_icon(dashboard_item, QStyle.StandardPixmap.SP_ComputerIcon)
+        self._set_navigation_item_icon(
+            dashboard_item,
+            QStyle.StandardPixmap.SP_ComputerIcon,
+        )
         dashboard_item.setToolTip(0, "Dashboard")
         dashboard_item.setData(0, Qt.ItemDataRole.UserRole, "dashboard")
         self._nav_list.addTopLevelItem(dashboard_item)
@@ -228,14 +231,20 @@ class MainWindow(QMainWindow):
 
         for group_title, phase, _group_scope, children in NAVIGATION_GROUPS:
             group_item = QTreeWidgetItem([group_title])
-            self._set_navigation_item_icon(group_item, QStyle.StandardPixmap.SP_DirIcon)
+            self._set_navigation_item_icon(
+                group_item,
+                self._navigation_group_icon(group_title),
+            )
             group_item.setToolTip(0, group_title)
             group_item.setData(0, Qt.ItemDataRole.UserRole, None)
             self._nav_list.addTopLevelItem(group_item)
 
             for child_title, route, scope in children:
                 child = QTreeWidgetItem([child_title])
-                self._set_navigation_item_icon(child, QStyle.StandardPixmap.SP_FileIcon)
+                self._set_navigation_item_icon(
+                    child,
+                    self._navigation_route_icon(route),
+                )
                 child.setToolTip(0, child_title)
                 child.setData(0, Qt.ItemDataRole.UserRole, route)
                 group_item.addChild(child)
@@ -258,6 +267,54 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(self._stack, 1)
         self.setCentralWidget(root)
         self._nav_list.setCurrentItem(dashboard_item)
+
+    def _navigation_group_icon(self, title: str) -> QStyle.StandardPixmap:
+        """Return a distinct semantic icon for each primary navigation group."""
+        icons = {
+            "Workspace": QStyle.StandardPixmap.SP_DirOpenIcon,
+            "School Setup": QStyle.StandardPixmap.SP_DirHomeIcon,
+            "Master Data": QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            "Timetable": QStyle.StandardPixmap.SP_FileDialogListView,
+            "Manual Editor": QStyle.StandardPixmap.SP_FileDialogContentsView,
+            "Absences & Relief": QStyle.StandardPixmap.SP_MessageBoxWarning,
+            "Reports": QStyle.StandardPixmap.SP_FileDialogInfoView,
+            "Settings": QStyle.StandardPixmap.SP_ComputerIcon,
+        }
+        return icons.get(title, QStyle.StandardPixmap.SP_DirIcon)
+
+    def _navigation_route_icon(self, route: str) -> QStyle.StandardPixmap:
+        """Return a meaningful icon for each navigation destination."""
+        icons = {
+            "workspace_new": QStyle.StandardPixmap.SP_FileDialogNewFolder,
+            "workspace_open": QStyle.StandardPixmap.SP_DialogOpenButton,
+            "workspace_save": QStyle.StandardPixmap.SP_DialogSaveButton,
+            "workspace_save_as": QStyle.StandardPixmap.SP_DialogSaveAllButton,
+            "workspace_exit": QStyle.StandardPixmap.SP_DialogCloseButton,
+            "school_profile": QStyle.StandardPixmap.SP_FileDialogInfoView,
+            "school_administrators": QStyle.StandardPixmap.SP_DirHomeIcon,
+            "schedule_signatories": QStyle.StandardPixmap.SP_DialogApplyButton,
+            "master_teachers": QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            "master_classes": QStyle.StandardPixmap.SP_FileDialogListView,
+            "master_class_teacher": QStyle.StandardPixmap.SP_DirHomeIcon,
+            "master_subjects": QStyle.StandardPixmap.SP_FileIcon,
+            "master_special_rooms": QStyle.StandardPixmap.SP_DirIcon,
+            "master_teaching_distribution": QStyle.StandardPixmap.SP_FileDialogContentsView,
+            "timetable_generate": QStyle.StandardPixmap.SP_BrowserReload,
+            "timetable_versions": QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            "timetable_view": QStyle.StandardPixmap.SP_FileDialogListView,
+            "manual_edit": QStyle.StandardPixmap.SP_FileDialogContentsView,
+            "manual_validate": QStyle.StandardPixmap.SP_DialogApplyButton,
+            "relief_absences": QStyle.StandardPixmap.SP_MessageBoxWarning,
+            "relief_management": QStyle.StandardPixmap.SP_DirHomeIcon,
+            "relief_timetable": QStyle.StandardPixmap.SP_FileDialogListView,
+            "reports_preview": QStyle.StandardPixmap.SP_FileDialogInfoView,
+            "reports_generate": QStyle.StandardPixmap.SP_DialogSaveButton,
+            "reports_settings": QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            "settings_general": QStyle.StandardPixmap.SP_ComputerIcon,
+            "settings_appearance": QStyle.StandardPixmap.SP_DesktopIcon,
+            "about_tavio": QStyle.StandardPixmap.SP_MessageBoxInformation,
+        }
+        return icons.get(route, QStyle.StandardPixmap.SP_FileIcon)
 
     def _set_navigation_item_icon(
         self,
@@ -307,6 +364,10 @@ class MainWindow(QMainWindow):
 
         self._sidebar_collapsed = collapsed
         if collapsed:
+            for index in range(self._nav_list.topLevelItemCount()):
+                item = self._nav_list.topLevelItem(index)
+                if item.childCount() > 0:
+                    item.setExpanded(False)
             self._sidebar.setFixedWidth(76)
         else:
             self._sidebar.setMinimumWidth(286)
@@ -474,6 +535,12 @@ class MainWindow(QMainWindow):
     ) -> None:
         """Expand or collapse a navigation group when its parent is clicked."""
         route = item.data(0, Qt.ItemDataRole.UserRole)
+        if self._sidebar_collapsed:
+            self._set_sidebar_collapsed(False)
+            if route is None and item.childCount() > 0:
+                item.setExpanded(True)
+            return
+
         if route is None and item.childCount() > 0:
             item.setExpanded(not item.isExpanded())
 
