@@ -12,14 +12,17 @@ The authoritative application codebase is the Python/PySide6 project in [tavio/]
 
 **Overall: Active development — foundational infrastructure is in place; core school workflows are still being developed.**
 
-TAVIO has progressed beyond the original Phase 0 skeleton. The SQLite database layer and versioned migrations are implemented, and several school-configuration screens are functional. The full Master Data workflows, timetable generation and editing, relief management, and final reporting workflows are not yet complete.
+TAVIO has progressed beyond the original Phase 0 skeleton. The SQLite database layer and versioned migrations are implemented, the main navigation structure is in place, and several school-configuration screens are functional. The portable workspace lifecycle, complete school-configuration workflows, full Master Data workflows, timetable generation and editing, relief management, and final reporting workflows are not yet complete.
 
 ### Implemented
 
 - Modular Python package structure for the Windows desktop application.
-- PySide6 application shell, navigation, startup diagnostics, and single-instance protection.
+- PySide6 application shell, collapsible sidebar navigation, startup diagnostics, and single-instance protection.
+- Main navigation structure covering Dashboard, File, School Setup, Master Data, Timetable, Manual Editor, Absences & Relief, Reports, and Settings.
+- School Setup navigation includes Academic Year, Bell & Break Times, School Sessions, School Profile, School Administrators, and Schedule Signatories. The three newer setup entries are navigation placeholders; their configuration workflows are not yet implemented.
+- Sidebar presentation includes expanded/collapsed modes, custom navigation icons, Dashboard placement, and the agreed submenu order.
 - Local application configuration, resource resolution, and rotating UTF-8 logging.
-- SQLite database infrastructure, schema management, and versioned migrations through migration version 3.
+- SQLite database infrastructure, schema management, and versioned migrations through migration version 4.
 - Database migration for Class Teacher linkage: nullable classes.class_teacher_id references teachers(id) with ON DELETE RESTRICT.
 - Functional school-configuration pages: School Profile, School Administrators, and Schedule Signatories.
 - Startup dependency checks and an OR-Tools CP-SAT smoke test.
@@ -27,6 +30,7 @@ TAVIO has progressed beyond the original Phase 0 skeleton. The SQLite database l
 
 ### Partially implemented / in progress
 
+- **Navigation foundation:** the main sidebar structure and submenu organization are implemented. This milestone covers navigation only; placeholder destinations do not imply that their underlying application workflows are complete.
 - **Phase 1 — Application and school configuration foundation:** database infrastructure and initial configuration screens exist; the complete configuration workflow and approved portable workspace-file design are not yet implemented.
 - **Phase 2 — Master Data foundation:** database groundwork exists, but complete Teachers, Classes, Subjects, Special Rooms, teaching assignments, and Class Teacher management workflows are not yet available in the application.
 
@@ -61,7 +65,7 @@ Separately, the approved product direction describes a portable single .tavio wo
 
 **The portable .tavio workspace-file workflow is a documented design, not an implemented feature.** The current SQLite database architecture and migrations must be technically reconciled with that workspace design before implementation. Existing database schema and migrations must not be discarded or replaced casually.
 
-See [docs/data_file_management.md](docs/data_file_management.md) for the approved workspace decisions.
+The next development focus is the workspace data lifecycle: storage ownership, active workspace paths, portable `.tavio` files, SAVE/OPEN/NEW TIMETABLE behaviour, and computer-local backup/recovery. The agreed product decisions and technical direction are recorded in [docs/data_management.md](docs/data_management.md), [docs/architecture_reconciliation.md](docs/architecture_reconciliation.md), and [docs/recovery_design.md](docs/recovery_design.md). These documents are design records; implementation details still require technical review and staged work.
 
 ## Technology Stack
 
