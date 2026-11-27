@@ -418,8 +418,6 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._sidebar_toggle_button is not None
         assert window._sidebar_toggle_button.text() == ""
         assert not window._sidebar_toggle_button.icon().isNull()
-        brand_title = window._brand_text_widget.findChild(QLabel, "BrandTitle")
-        assert brand_title is None
         assert window._brand_text_widget is None
         file_item = window._nav_list.topLevelItem(1)
         assert file_item.text(0) == "File"
