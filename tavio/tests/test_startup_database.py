@@ -404,10 +404,14 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._sidebar is not None
         assert window._sidebar.width() == 250
         assert window._sidebar_toggle_button is not None
+        assert window._sidebar_toggle_button.text() == ""
+        assert not window._sidebar_toggle_button.icon().isNull()
+        assert window._nav_list.rootIsDecorated() is False
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is True
         assert window._sidebar.width() == 84
         assert window._sidebar_toggle_button.toolTip() == "Expand sidebar"
+        assert not window._sidebar_toggle_button.icon().isNull()
         assert window._nav_list.topLevelItem(0).text(0) == "System Overview (Phase 0)"
 
         window._sidebar_toggle_button.click()
