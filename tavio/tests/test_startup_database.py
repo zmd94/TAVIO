@@ -388,7 +388,10 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert window._nav_list.topLevelItemCount() == 1 + len(NAVIGATION_GROUPS)
         dashboard_item = window._nav_list.topLevelItem(0)
         assert dashboard_item.text(0) == "Dashboard"
-        assert window._nav_list.currentItem().text(0) == "Dashboard"
+        assert dashboard_item.isHidden()
+        assert window._nav_list.currentItem() is None
+        assert window._dashboard_button is not None
+        assert window._dashboard_button.isVisible()
         school_setup_item = window._nav_list.topLevelItem(2)
         assert school_setup_item.text(0) == "School Setup"
         assert school_setup_item.childCount() == 3
@@ -455,10 +458,17 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         about_heading = about_page.findChild(QLabel, "PageTitle")
         assert about_heading is not None
         assert about_heading.text() == "About TAVIO — Environment & Packaging Verification"
-        window._nav_list.setCurrentItem(dashboard_item)
+        window._show_dashboard()
+        assert window._stack.currentWidget() == window._stack.widget(
+            window._page_indexes["dashboard"]
+        )
         window._sidebar_toggle_button.click()
         assert window._sidebar_collapsed is True
         assert window._sidebar.width() == 76
+        assert not dashboard_item.isHidden()
+        assert window._dashboard_button is not None
+        assert dashboard_item.text(0) == ""
+        assert window._dashboard_button.isHidden()
         assert window._brand_icon_label is None
         assert window._brand_text_widget is None
         assert window._nav_list.currentItem() is None
