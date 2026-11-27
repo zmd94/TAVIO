@@ -412,7 +412,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(8)
-        status = QLabel(f"Not yet implement ({phase}).")
+        status = QLabel(f"Not yet implement ({phase})")
         status.setObjectName("SectionTitle")
         scope = QLabel(f"Planned scope: {planned_scope}")
         scope.setWordWrap(True)
