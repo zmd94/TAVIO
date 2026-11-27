@@ -281,3 +281,31 @@ When users transfer files using USB, network storage, or cloud storage, TAVIO tr
 ---
 
 **Document status:** Workspace, portable native-SQLite file, offline-first multi-computer behavior, workspace identity, computer-local autosave/recovery, password-protection, and version-compatibility decisions recorded. Implementation remains unauthorized pending separate technical review.
+
+## 17. Existing timetable autosave schema cleanup — planned migration v4
+
+The user reviewed the existing database schema and agreed that the legacy timetable-draft autosave mechanism is not needed as a separate autosave system. TAVIO has not yet implemented the timetable-construction workflow that would use this table, and no active timetable-draft autosave workflow or data needs to be preserved.
+
+The current schema findings are:
+- `timetable_workspace_autosaves` is created by the original v1 schema.
+- The table has two associated scope-validation triggers: `trg_twa_base_version_ins` and `trg_twa_base_version_upd`.
+- `app_settings` is seeded with `autosave_interval_minutes = 10`, describing the old timetable-workspace autosave interval.
+- The reviewed application runtime does not currently read or write this table or setting.
+
+**Agreed migration v4 scope (design decision only; not implemented):**
+
+1. Add a new forward-only SQLite schema migration, version 4. Do not edit historical migrations v1, v2, or v3.
+2. Drop `trg_twa_base_version_ins` and `trg_twa_base_version_upd`.
+3. Drop `timetable_workspace_autosaves`.
+4. Delete the legacy `app_settings` row whose key is `autosave_interval_minutes`.
+5. Preserve all unrelated tables, rows, indexes, triggers, and foreign-key relationships.
+6. Set `PRAGMA user_version` to 4 only as part of the successful atomic migration.
+7. A fresh database initialized using the complete migration chain must finish at schema version 4. Existing v3 databases must upgrade to v4.
+8. The migration test suite must verify preservation of unrelated data, removal of the legacy table/triggers/setting, foreign-key and SQLite integrity, idempotent initialization, and complete rollback if migration fails.
+
+**One whole-workspace recovery mechanism replaces the legacy timetable autosave mechanism.** The agreed whole-workspace recovery runs every 5 minutes and writes to computer-local recovery data associated with the workspace ID. It does not write to the main portable `.tavio` file. There is no separate timetable autosave table or second autosave interval.
+
+The 5-minute recovery interval is an application-local configuration value, not a workspace setting. It must not be stored in `app_settings` or in the portable `.tavio` database. This keeps computer-local recovery policy separate from portable school workspace data.
+
+Migration v4 only removes obsolete schema objects and the old setting. It does not implement the new recovery engine, local recovery file format, or workspace lifecycle. Those require separate technical design and explicit implementation authorization.
+
