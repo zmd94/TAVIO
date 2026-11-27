@@ -420,7 +420,7 @@ def test_main_window_receives_database_manager_and_preserves_ui(
         assert brand_title.text() == "TAVIO"
         assert brand_subtitle is not None
         assert brand_subtitle.text() == (
-            "Timetable Administration &\\nValidation Intelligent Organizer"
+            "Timetable Administration &\nValidation Intelligent Organizer"
         )
         assert brand_subtitle.wordWrap()
         workspace_item = window._nav_list.topLevelItem(1)
