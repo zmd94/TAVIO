@@ -179,7 +179,7 @@ class MainWindow(QMainWindow):
         brand_label = QLabel(APP_NAME)
         brand_label.setObjectName("BrandTitle")
         subtitle_label = QLabel(
-            "Timetable Administration &\\nValidation Intelligent Organizer"
+            "Timetable Administration &\nValidation Intelligent Organizer"
         )
         subtitle_label.setObjectName("BrandSubtitle")
         subtitle_label.setWordWrap(True)
