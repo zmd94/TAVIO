@@ -476,6 +476,10 @@ def test_main_window_receives_database_manager_and_preserves_ui(
             for index in range(window._nav_list.topLevelItemCount())
         )
         assert all(
+            window._nav_list.topLevelItem(index).toolTip(0) == ""
+            for index in range(window._nav_list.topLevelItemCount())
+        )
+        assert all(
             window._nav_list.topLevelItem(index).textAlignment(0)
             == Qt.AlignmentFlag.AlignCenter
             for index in range(window._nav_list.topLevelItemCount())
