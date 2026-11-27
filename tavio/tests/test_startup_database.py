@@ -406,9 +406,12 @@ def test_main_window_receives_database_manager_and_preserves_ui(
             "School Administrators",
             "Schedule Signatories",
         ]
-        assert school_setup_item.child(3).data(0, Qt.ItemDataRole.UserRole) == "school_academic_year"
-        assert school_setup_item.child(4).data(0, Qt.ItemDataRole.UserRole) == "school_sessions"
-        assert school_setup_item.child(5).data(0, Qt.ItemDataRole.UserRole) == "school_bell_break_times"
+        assert school_setup_item.child(0).data(0, Qt.ItemDataRole.UserRole) == "school_academic_year"
+        assert school_setup_item.child(1).data(0, Qt.ItemDataRole.UserRole) == "school_bell_break_times"
+        assert school_setup_item.child(2).data(0, Qt.ItemDataRole.UserRole) == "school_sessions"
+        assert school_setup_item.child(3).data(0, Qt.ItemDataRole.UserRole) == "school_profile"
+        assert school_setup_item.child(4).data(0, Qt.ItemDataRole.UserRole) == "school_administrators"
+        assert school_setup_item.child(5).data(0, Qt.ItemDataRole.UserRole) == "schedule_signatories"
         assert all(
             not school_setup_item.child(index).icon(0).isNull()
             for index in (3, 4, 5)
