@@ -11,14 +11,14 @@ QMainWindow {
 
 #BrandTitle {
     color: #ffffff;
-    font-size: 20px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 1px;
 }
 
 #BrandSubtitle {
     color: #9eb3d1;
-    font-size: 12px;
+    font-size: 13px;
     margin-bottom: 8px;
 }
 
