@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import QEvent, QSize, Qt
-from PySide6.QtGui import QColor, QHelpEvent, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QTreeWidget,
     QTreeWidgetItem,
-    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -191,7 +190,6 @@ class MainWindow(QMainWindow):
         self._nav_list.setIndentation(16)
         self._nav_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._nav_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._nav_list.viewport().installEventFilter(self)
 
         dashboard_item = QTreeWidgetItem(["Dashboard"])
         self._set_navigation_item_icon(
@@ -443,9 +441,20 @@ class MainWindow(QMainWindow):
     ) -> None:
         """Center navigation icons in compact mode and restore labels in expanded mode."""
         label_role = Qt.ItemDataRole.UserRole + 1
+        icon_role = Qt.ItemDataRole.UserRole + 2
         if centered:
             if item.data(0, label_role) is None:
                 item.setData(0, label_role, item.text(0))
+            if item.data(0, icon_role) is None and not item.icon(0).isNull():
+                original_icon = item.icon(0)
+                item.setData(0, icon_role, original_icon)
+                source = original_icon.pixmap(QSize(20, 20))
+                padded = QPixmap(26, 20)
+                padded.fill(Qt.GlobalColor.transparent)
+                painter = QPainter(padded)
+                painter.drawPixmap(6, 0, source)
+                painter.end()
+                item.setIcon(0, QIcon(padded))
             item.setText(0, "")
             item.setToolTip(0, "")
             item.setTextAlignment(0, Qt.AlignmentFlag.AlignCenter)
@@ -453,8 +462,11 @@ class MainWindow(QMainWindow):
             saved_label = item.data(0, label_role)
             if saved_label is not None:
                 item.setText(0, saved_label)
-                item.setToolTip(0, saved_label)
                 item.setData(0, label_role, None)
+            original_icon = item.data(0, icon_role)
+            if original_icon is not None:
+                item.setIcon(0, original_icon)
+                item.setData(0, icon_role, None)
             item.setTextAlignment(
                 0,
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -510,23 +522,6 @@ class MainWindow(QMainWindow):
             tooltip = "Expand sidebar" if collapsed else "Minimize sidebar"
             self._sidebar_toggle_button.setToolTip(tooltip)
             self._sidebar_toggle_button.setAccessibleName(tooltip)
-
-    def eventFilter(self, watched: object, event: object) -> bool:
-        """Show tooltips only over navigation icons while the sidebar is collapsed."""
-        if watched is self._nav_list.viewport() and event.type() == QEvent.Type.ToolTip:
-            if self._sidebar_collapsed and isinstance(event, QHelpEvent):
-                item = self._nav_list.itemAt(event.pos())
-                if item is not None:
-                    rect = self._nav_list.visualItemRect(item)
-                    icon_center = rect.left() + rect.width() // 2
-                    if abs(event.pos().x() - icon_center) <= 14:
-                        label = item.data(0, Qt.ItemDataRole.UserRole + 1)
-                        if label:
-                            QToolTip.showText(event.globalPos(), str(label), self._nav_list)
-                            return True
-            QToolTip.hideText()
-            return True
-        return super().eventFilter(watched, event)
 
     def _build_overview_page(self) -> QWidget:
         page = QWidget()
