@@ -461,8 +461,14 @@ def test_main_window_navigates_to_school_administrators_and_reloads(
         database_manager=db_manager,
     )
     try:
-        assert window._nav_list.item(2).text() == "School Administrators (Phase 1)"
-        window._nav_list.setCurrentRow(2)
+        school_setup_item = window._nav_list.topLevelItem(1)
+        assert school_setup_item.text(0) == "School Setup"
+        administrators_item = school_setup_item.child(1)
+        assert administrators_item.text(0) == "School Administrators"
+        assert (
+            administrators_item.data(0, Qt.ItemDataRole.UserRole) == "school_administrators"
+        )
+        window._nav_list.setCurrentItem(administrators_item)
         assert window._stack.currentWidget() is window._school_administrators_page
         assert window._school_administrators_page._table.rowCount() == 1
         assert window._school_administrators_page._table.item(0, 1).text() == "Guru Besar"
