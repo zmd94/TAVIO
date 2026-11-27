@@ -6,7 +6,14 @@ This project uses version numbers in the format `vMAJOR.MINOR.PATCH`.
 
 ## [Unreleased]
 
-The entries below summarize code changes present in the repository's `main` branch that have been implemented and verified. They are not a published or tagged release. No release version is assigned yet.
+The entries below summarize code changes present in the repository's `main` branch. Items under the verified history have passed their recorded checks; the latest navigation milestone is listed separately pending a fresh local test run. These are not a published or tagged release. No release version is assigned yet.
+
+### Implemented — pending local verification
+
+- **Navigation structure milestone:** Completed the main collapsible sidebar hierarchy for Dashboard, File, School Setup, Master Data, Timetable, Manual Editor, Absences & Relief, Reports, and Settings.
+- **School Setup navigation:** Added and ordered the six submenu destinations as Academic Year, Bell & Break Times, School Sessions, School Profile, School Administrators, and Schedule Signatories. Academic Year, Bell & Break Times, and School Sessions are navigation placeholders only; their page workflows remain to be designed and implemented.
+- **Sidebar interaction and presentation:** Added expanded/collapsed navigation behaviour, custom icons for key menu items, Dashboard positioning, and removal of sidebar tooltips. Save As shares the Save icon.
+- **Navigation tests:** Updated startup/navigation tests to assert the School Setup submenu order, route keys, icons, collapsed startup state, sidebar layout, and removal of tooltips. A fresh local Ruff and full pytest run is still required for this latest milestone.
 
 ### Added
 
@@ -59,6 +66,6 @@ The entries below summarize code changes present in the repository's `main` bran
 - **MINOR**: New functionality that remains compatible with the existing system.
 - **PATCH**: Bug fixes and small, backward-compatible corrections.
 
-Only code changes that have been successfully implemented and verified through the relevant tests are recorded as completed entries. Discussions, proposals, planned work, and unverified changes must not be presented as completed changes.
+Only code changes that have been successfully implemented and verified through the relevant tests are recorded as verified entries. Implemented changes awaiting a fresh test run are explicitly labelled as pending verification. Discussions and proposals must not be presented as completed changes.
 
 Each versioned entry should include its release date and relevant change categories. Move verified entries from `[Unreleased]` into a versioned section (for example, `v0.1.0`) only when that version is formally released or tagged.
