@@ -99,20 +99,20 @@ def test_initialize_applies_v1_schema_and_seeds(tmp_path: Path) -> None:
     assert second_result.applied_versions == ()
 
 
-def test_initialize_applies_default_migrations_from_zero_to_v3(tmp_path: Path) -> None:
+def test_initialize_applies_default_migrations_from_zero_to_v4(tmp_path: Path) -> None:
     db_path = tmp_path / "tavio.db"
     manager = DatabaseManager(db_path)
 
-    assert [m.version for m in DEFAULT_MIGRATIONS] == [1, 2, 3]
+    assert [m.version for m in DEFAULT_MIGRATIONS] == [1, 2, 3, 4]
 
     result = manager.initialize()
 
     assert db_path.is_file()
     assert result.initial_version == 0
-    assert result.final_version == 3
-    assert result.applied_versions == (1, 2, 3)
-    assert manager.supported_version == 3
-    assert manager.get_schema_version() == 3
+    assert result.final_version == 4
+    assert result.applied_versions == (1, 2, 3, 4)
+    assert manager.supported_version == 4
+    assert manager.get_schema_version() == 4
 
     with manager.connection() as conn:
         tables = {
@@ -127,10 +127,10 @@ def test_initialize_applies_default_migrations_from_zero_to_v3(tmp_path: Path) -
                 "SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'"
             ).fetchall()
         ]
-        triggers = [
+        triggers = {
             row["name"]
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
-        ]
+        }
         fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
         integrity_rows = conn.execute("PRAGMA integrity_check").fetchall()
         school_profile_cols = {
@@ -145,13 +145,20 @@ def test_initialize_applies_default_migrations_from_zero_to_v3(tmp_path: Path) -
             "SELECT schedule_type, prepared_by_administrator_id, verified_by_administrator_id "
             "FROM schedule_signatory_settings ORDER BY schedule_type"
         ).fetchall()
+        legacy_setting = conn.execute(
+            "SELECT setting_key FROM app_settings WHERE setting_key = 'autosave_interval_minutes'"
+        ).fetchone()
 
-    assert len(tables) == 44
+    assert len(tables) == 43
     assert {"school_administrators", "schedule_signatory_settings"}.issubset(tables)
+    assert "timetable_workspace_autosaves" not in tables
     assert len(custom_indexes) == 45
     assert sum(1 for name in custom_indexes if name.startswith("uq_")) == 23
     assert sum(1 for name in custom_indexes if name.startswith("idx_")) == 22
-    assert len(triggers) == 64
+    assert len(triggers) == 62
+    assert "trg_twa_base_version_ins" not in triggers
+    assert "trg_twa_base_version_upd" not in triggers
+    assert legacy_setting is None
     assert fk_violations == []
     assert [tuple(row) for row in integrity_rows] == [("ok",)]
     assert "logo_path" in school_profile_cols
@@ -177,8 +184,8 @@ def test_initialize_applies_default_migrations_from_zero_to_v3(tmp_path: Path) -
     ]
 
     second_result = manager.initialize()
-    assert second_result.initial_version == 3
-    assert second_result.final_version == 3
+    assert second_result.initial_version == 4
+    assert second_result.final_version == 4
     assert second_result.applied_versions == ()
 
     with manager.connection() as conn:
@@ -194,8 +201,8 @@ def test_initialize_integrates_with_app_paths(isolated_tavio_dir: Path) -> None:
 
     assert manager.db_path == paths.db_path.resolve()
     assert paths.db_path.is_file()
-    assert result.final_version == 3
-    assert result.applied_versions == (1, 2, 3)
+    assert result.final_version == 4
+    assert result.applied_versions == (1, 2, 3, 4)
 
 
 def test_parent_directories_are_created_automatically(tmp_path: Path) -> None:
@@ -465,13 +472,13 @@ def test_connections_are_closed_after_normal_and_error_exits(tmp_path: Path) -> 
     manager.initialize()
 
     with manager.connection() as conn:
-        assert get_schema_version(conn) == 3
+        assert get_schema_version(conn) == 4
 
     with pytest.raises(sqlite3.ProgrammingError, match="closed"):
         conn.execute("SELECT 1")
 
     with pytest.raises(ValueError, match="trigger"), manager.connection() as err_conn:
-        assert get_schema_version(err_conn) == 3
+        assert get_schema_version(err_conn) == 4
         raise ValueError("trigger")
 
     with pytest.raises(sqlite3.ProgrammingError, match="closed"):
@@ -1137,7 +1144,7 @@ def test_v2_to_v3_upgrade_preserves_data_and_leaves_class_teacher_id_null(tmp_pa
             ") VALUES (1, 1, 1, 1, 480, 510)"
         )
 
-    v3_manager = DatabaseManager(db_path)
+    v3_manager = DatabaseManager(db_path, migrations=DEFAULT_MIGRATIONS[:3])
     upgrade_result = v3_manager.initialize()
 
     assert upgrade_result.initial_version == 2
@@ -1338,6 +1345,304 @@ def test_failed_v3_migration_rolls_back_and_preserves_v2(tmp_path: Path) -> None
     assert (class_row["short_name"], class_row["name"]) == ("1A", "1 Amanah")
     assert fk_violations == []
     assert [tuple(r) for r in integrity_rows] == [("ok",)]
+
+
+def test_v3_to_v4_upgrade_drops_legacy_autosave_and_preserves_data(tmp_path: Path) -> None:
+    db_path = tmp_path / "upgrade_v3_to_v4.db"
+    v3_manager = DatabaseManager(db_path, migrations=DEFAULT_MIGRATIONS[:3])
+    v3_init = v3_manager.initialize()
+    assert v3_init.final_version == 3
+
+    with v3_manager.transaction() as conn:
+        pre_tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        pre_triggers = {
+            row["name"]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+        }
+        assert "timetable_workspace_autosaves" in pre_tables
+        assert {"trg_twa_base_version_ins", "trg_twa_base_version_upd"}.issubset(pre_triggers)
+        assert (
+            conn.execute(
+                "SELECT setting_value FROM app_settings WHERE setting_key = 'autosave_interval_minutes'"
+            ).fetchone()["setting_value"]
+            == "10"
+        )
+
+        conn.execute(
+            "INSERT INTO app_settings (setting_key, setting_value, value_type, description) "
+            "VALUES ('signatory_label_language', 'bm', 'STRING', 'Signatory label language')"
+        )
+        conn.execute(
+            "INSERT INTO school_profile (id, school_name, school_code, school_week_group) "
+            "VALUES (1, 'SK Seri Mawar', 'BBA4004', 'A')"
+        )
+        conn.execute(
+            "INSERT INTO academic_years (id, year_code, name, start_date, end_date) "
+            "VALUES (1, '2026', 'Tahun 2026', '2026-01-01', '2026-12-31')"
+        )
+        conn.execute(
+            "INSERT INTO school_sessions (id, academic_year_id, session_code, name, sort_order) "
+            "VALUES (1, 1, 'PAGI', 'Sesi Pagi', 1)"
+        )
+        conn.execute(
+            "INSERT INTO education_levels (id, academic_year_id, session_id, level_code, name, sort_order) "
+            "VALUES (1, 1, 1, 'T1', 'Tingkatan 1', 1)"
+        )
+        conn.execute(
+            "INSERT INTO rooms (id, short_name, name, room_type, capacity) "
+            "VALUES (1, 'MK1', 'Makmal Komputer 1', 'SPECIAL', 40)"
+        )
+        conn.execute(
+            "INSERT INTO subjects (id, short_name, name) VALUES (1, 'BM', 'Bahasa Melayu')"
+        )
+        conn.execute(
+            "INSERT INTO teachers (id, short_name, full_name) "
+            "VALUES (1, 'CG A', 'Ahmad bin Ali')"
+        )
+        conn.execute(
+            "INSERT INTO classes ("
+            "    id, academic_year_id, session_id, education_level_id, short_name, name, class_teacher_id"
+            ") VALUES (1, 1, 1, 1, '1A', '1 Amanah', 1)"
+        )
+        conn.execute(
+            "INSERT INTO timetable_versions (id, academic_year_id, session_id, version_number, version_name) "
+            "VALUES (1, 1, 1, 1, 'Jadual V1')"
+        )
+        conn.execute(
+            "INSERT INTO timetable_lessons ("
+            "    id, timetable_version_id, academic_year_id, session_id, subject_id, "
+            "    assignment_type, lessons_per_week, periods_per_lesson"
+            ") VALUES (1, 1, 1, 1, 1, 'SINGLE', 1, 1)"
+        )
+        conn.execute(
+            "INSERT INTO timetable_lesson_targets ("
+            "    id, timetable_version_id, timetable_lesson_id, academic_year_id, session_id, class_id"
+            ") VALUES (1, 1, 1, 1, 1, 1)"
+        )
+        conn.execute(
+            "INSERT INTO timetable_lesson_teachers ("
+            "    id, timetable_version_id, timetable_lesson_id, academic_year_id, session_id, teacher_id, is_lead"
+            ") VALUES (1, 1, 1, 1, 1, 1, 1)"
+        )
+        conn.execute(
+            "INSERT INTO timetable_entries ("
+            "    id, timetable_version_id, timetable_lesson_id, day_of_week, start_minute, end_minute"
+            ") VALUES (1, 1, 1, 1, 480, 510)"
+        )
+        conn.execute(
+            "INSERT INTO timetable_workspace_autosaves ("
+            "    id, academic_year_id, session_id, base_timetable_version_id, payload_json"
+            ") VALUES (1, 1, 1, 1, '{\"legacy\": true}')"
+        )
+
+    v4_manager = DatabaseManager(db_path)
+    upgrade_result = v4_manager.initialize()
+
+    assert upgrade_result.initial_version == 3
+    assert upgrade_result.final_version == 4
+    assert upgrade_result.applied_versions == (4,)
+    assert v4_manager.get_schema_version() == 4
+
+    with v4_manager.connection() as conn:
+        tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        custom_indexes = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+        triggers = {
+            row["name"]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+        }
+        app_settings_rows = {
+            row["setting_key"]: row["setting_value"]
+            for row in conn.execute("SELECT setting_key, setting_value FROM app_settings").fetchall()
+        }
+        school_row = conn.execute(
+            "SELECT school_name, school_code, school_week_group FROM school_profile WHERE id = 1"
+        ).fetchone()
+        room_row = conn.execute(
+            "SELECT short_name, name, room_type FROM rooms WHERE id = 1"
+        ).fetchone()
+        subject_row = conn.execute(
+            "SELECT short_name, name FROM subjects WHERE id = 1"
+        ).fetchone()
+        teacher_row = conn.execute(
+            "SELECT short_name, full_name FROM teachers WHERE id = 1"
+        ).fetchone()
+        class_row = conn.execute(
+            "SELECT short_name, name, class_teacher_id FROM classes WHERE id = 1"
+        ).fetchone()
+        version_row = conn.execute(
+            "SELECT version_name FROM timetable_versions WHERE id = 1"
+        ).fetchone()
+        entry_row = conn.execute(
+            "SELECT timetable_lesson_id, day_of_week, start_minute, end_minute "
+            "FROM timetable_entries WHERE id = 1"
+        ).fetchone()
+        fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        integrity_rows = conn.execute("PRAGMA integrity_check").fetchall()
+
+    assert len(tables) == 43
+    assert len(custom_indexes) == 45
+    assert len(triggers) == 62
+    assert "timetable_workspace_autosaves" not in tables
+    assert "trg_twa_base_version_ins" not in triggers
+    assert "trg_twa_base_version_upd" not in triggers
+    assert "autosave_interval_minutes" not in app_settings_rows
+    assert app_settings_rows == {"signatory_label_language": "bm"}
+    assert school_row is not None
+    assert (school_row["school_name"], school_row["school_code"], school_row["school_week_group"]) == (
+        "SK Seri Mawar",
+        "BBA4004",
+        "A",
+    )
+    assert room_row is not None
+    assert (room_row["short_name"], room_row["name"], room_row["room_type"]) == (
+        "MK1",
+        "Makmal Komputer 1",
+        "SPECIAL",
+    )
+    assert subject_row is not None
+    assert (subject_row["short_name"], subject_row["name"]) == ("BM", "Bahasa Melayu")
+    assert teacher_row is not None
+    assert (teacher_row["short_name"], teacher_row["full_name"]) == ("CG A", "Ahmad bin Ali")
+    assert class_row is not None
+    assert (class_row["short_name"], class_row["name"], class_row["class_teacher_id"]) == (
+        "1A",
+        "1 Amanah",
+        1,
+    )
+    assert version_row is not None and version_row["version_name"] == "Jadual V1"
+    assert entry_row is not None
+    assert (
+        entry_row["timetable_lesson_id"],
+        entry_row["day_of_week"],
+        entry_row["start_minute"],
+        entry_row["end_minute"],
+    ) == (1, 1, 480, 510)
+    assert fk_violations == []
+    assert [tuple(row) for row in integrity_rows] == [("ok",)]
+
+    # Re-running initialize() on v4 must not re-apply any migration.
+    repeat_result = v4_manager.initialize()
+    assert repeat_result.initial_version == 4
+    assert repeat_result.final_version == 4
+    assert repeat_result.applied_versions == ()
+
+
+def test_failed_v4_migration_rolls_back_and_preserves_v3(tmp_path: Path) -> None:
+    from tavio.database.schema_v4 import MIGRATION_V4_SQL
+
+    db_path = tmp_path / "failed_v4.db"
+    v3_manager = DatabaseManager(db_path, migrations=DEFAULT_MIGRATIONS[:3])
+    v3_manager.initialize()
+
+    with v3_manager.transaction() as conn:
+        conn.execute(
+            "INSERT INTO app_settings (setting_key, setting_value, value_type, description) "
+            "VALUES ('signatory_label_language', 'en', 'STRING', 'Signatory label language')"
+        )
+        conn.execute(
+            "INSERT INTO academic_years (id, year_code, name, start_date, end_date) "
+            "VALUES (1, '2026', 'Tahun 2026', '2026-01-01', '2026-12-31')"
+        )
+        conn.execute(
+            "INSERT INTO school_sessions (id, academic_year_id, session_code, name, sort_order) "
+            "VALUES (1, 1, 'PAGI', 'Sesi Pagi', 1)"
+        )
+        conn.execute(
+            "INSERT INTO timetable_versions (id, academic_year_id, session_id, version_number, version_name) "
+            "VALUES (1, 1, 1, 1, 'Jadual Kekal')"
+        )
+        conn.execute(
+            "INSERT INTO timetable_workspace_autosaves ("
+            "    id, academic_year_id, session_id, base_timetable_version_id, payload_json"
+            ") VALUES (1, 1, 1, 1, '{\"keep\": true}')"
+        )
+
+    broken_v4_migrations = (
+        *DEFAULT_MIGRATIONS[:3],
+        Migration(
+            version=4,
+            description="Broken v4 after dropping legacy autosave objects",
+            sql=f"{MIGRATION_V4_SQL}\nINSERT INTO non_existent_v4_table (id) VALUES (1);",
+        ),
+    )
+    failing_v4_manager = DatabaseManager(db_path, migrations=broken_v4_migrations)
+
+    with pytest.raises(DatabaseMigrationError, match="v4"):
+        failing_v4_manager.initialize()
+
+    assert failing_v4_manager.get_schema_version() == 3
+    with failing_v4_manager.connection() as conn:
+        tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        triggers = {
+            row["name"]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'").fetchall()
+        }
+        app_settings_rows = {
+            row["setting_key"]: row["setting_value"]
+            for row in conn.execute("SELECT setting_key, setting_value FROM app_settings").fetchall()
+        }
+        autosave_row = conn.execute(
+            "SELECT payload_json FROM timetable_workspace_autosaves WHERE id = 1"
+        ).fetchone()
+        version_row = conn.execute(
+            "SELECT version_name FROM timetable_versions WHERE id = 1"
+        ).fetchone()
+        fk_violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        integrity_rows = conn.execute("PRAGMA integrity_check").fetchall()
+
+    assert len(tables) == 44
+    assert len(triggers) == 64
+    assert "timetable_workspace_autosaves" in tables
+    assert {"trg_twa_base_version_ins", "trg_twa_base_version_upd"}.issubset(triggers)
+    assert app_settings_rows == {
+        "autosave_interval_minutes": "10",
+        "signatory_label_language": "en",
+    }
+    assert autosave_row is not None and autosave_row["payload_json"] == '{"keep": true}'
+    assert version_row is not None and version_row["version_name"] == "Jadual Kekal"
+    assert fk_violations == []
+    assert [tuple(r) for r in integrity_rows] == [("ok",)]
+
+
+def test_v4_migration_fails_explicitly_when_legacy_objects_missing(tmp_path: Path) -> None:
+    db_path = tmp_path / "missing_legacy_v4.db"
+    v3_manager = DatabaseManager(db_path, migrations=DEFAULT_MIGRATIONS[:3])
+    v3_manager.initialize()
+
+    with v3_manager.transaction() as conn:
+        conn.execute("DROP TRIGGER trg_twa_base_version_ins")
+        conn.execute("DROP TRIGGER trg_twa_base_version_upd")
+        conn.execute("DROP TABLE timetable_workspace_autosaves")
+
+    v4_manager = DatabaseManager(db_path)
+    with pytest.raises(DatabaseMigrationError, match="v4"):
+        v4_manager.initialize()
+
+    assert v4_manager.get_schema_version() == 3
+    with v4_manager.connection() as conn:
+        assert (
+            conn.execute(
+                "SELECT setting_value FROM app_settings WHERE setting_key = 'autosave_interval_minutes'"
+            ).fetchone()["setting_value"]
+            == "10"
+        )
 
 
 def test_database_package_has_no_ui_or_pyside_dependencies() -> None:

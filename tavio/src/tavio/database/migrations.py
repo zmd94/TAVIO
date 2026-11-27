@@ -14,6 +14,7 @@ from tavio.database.exceptions import (
 from tavio.database.schema_v1 import MIGRATION_V1_SQL
 from tavio.database.schema_v2 import MIGRATION_V2_SQL
 from tavio.database.schema_v3 import MIGRATION_V3_SQL
+from tavio.database.schema_v4 import MIGRATION_V4_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,14 @@ DEFAULT_MIGRATIONS: tuple[Migration, ...] = (
             "teachers(id) with ON DELETE RESTRICT"
         ),
         sql=MIGRATION_V3_SQL,
+    ),
+    Migration(
+        version=4,
+        description=(
+            "Drop legacy timetable_workspace_autosaves table, scope triggers, "
+            "and autosave_interval_minutes app setting"
+        ),
+        sql=MIGRATION_V4_SQL,
     ),
 )
 
