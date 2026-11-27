@@ -43,12 +43,15 @@ from tavio.ui.school_profile_page import SchoolProfilePage
 
 logger = logging.getLogger(__name__)
 
-FUTURE_NAVIGATION_MODULES: tuple[tuple[str, str], ...] = (
-    ("Master Data (Phase 2)", "Teachers, classes, education levels, subjects, rooms, and assignments."),
-    ("Timetable Engine (Phase 3)", "OR-Tools CP-SAT cross-session timetable generation."),
-    ("Manual Editor (Phase 4)", "Interactive Class/Teacher/Room timetable editor and version activation."),
-    ("Absences & Relief (Phase 5)", "Teacher absences, automated relief batches, and audit logs."),
-    ("Reports & Backup (Phase 6)", "ReportLab PDFs, Slip Guru Ganti, OpenPyXL exports, and backups."),
+NAVIGATION_GROUPS: tuple[tuple[str, str, str, tuple[tuple[str, str, str], ...]], ...] = (
+    ("Workspace", "Phase 0", "Workspace file lifecycle.", (("New", "workspace_new", "Create a new school workspace."), ("Open", "workspace_open", "Open an existing school workspace."), ("Save", "workspace_save", "Save changes to the active workspace."), ("Save As", "workspace_save_as", "Save the active workspace to another file."), ("Exit", "workspace_exit", "Close TAVIO safely."))),
+    ("School Setup", "Phase 1", "School identity and authorized schedule signatories.", (("School Profile", "school_profile", ""), ("School Administrators", "school_administrators", ""), ("Schedule Signatories", "schedule_signatories", ""))),
+    ("Master Data", "Phase 2", "Manage teachers, classes, class teachers, subjects, special rooms, and teaching distribution.", (("Teachers", "master_teachers", "Manage teacher records."), ("Classes", "master_classes", "Manage class records."), ("Class Teacher", "master_class_teacher", "Assign class teachers to classes."), ("Subjects", "master_subjects", "Manage subject records."), ("Special Rooms", "master_special_rooms", "Manage special teaching rooms."), ("Teaching Distribution", "master_teaching_distribution", "Configure teaching distribution."))),
+    ("Timetable", "Phase 3", "Generate, version, and view school timetables.", (("Generate Timetable", "timetable_generate", "Generate a timetable using configured constraints."), ("Timetable Versions", "timetable_versions", "Review and manage timetable versions."), ("View Timetable", "timetable_view", "View the selected timetable."))),
+    ("Manual Editor", "Phase 4", "Edit timetable assignments and validate changes before activation.", (("Edit Timetable", "manual_edit", "Edit timetable assignments."), ("Validate Changes", "manual_validate", "Validate timetable changes."))),
+    ("Absences & Relief", "Phase 5", "Record teacher absences and manage relief assignments and timetables.", (("Teacher Absences", "relief_absences", "Record and review teacher absences."), ("Relief Management", "relief_management", "Manage relief teacher assignments."), ("Relief Timetable", "relief_timetable", "View the relief timetable."))),
+    ("Reports", "Phase 6", "Preview, generate, and configure PDF reports.", (("PDF Preview", "reports_preview", "Preview PDF reports."), ("Generate PDF", "reports_generate", "Generate PDF reports."), ("Report Settings", "reports_settings", "Configure report settings."))),
+    ("Settings", "Phase 0", "General preferences, appearance, and application information.", (("General", "settings_general", "Configure general application settings."), ("Appearance", "settings_appearance", "Configure application appearance."), ("About TAVIO", "about_tavio", ""))),
 )
 
 
@@ -201,62 +204,56 @@ class MainWindow(QMainWindow):
         self._nav_list.setExpandsOnDoubleClick(False)
         self._nav_list.setIndentation(0)
 
-        overview_item = QTreeWidgetItem(["System Overview (Phase 0)"])
-        self._set_navigation_item_icon(overview_item, QStyle.StandardPixmap.SP_ComputerIcon)
-        overview_item.setToolTip(0, "System Overview (Phase 0)")
-        overview_item.setData(0, Qt.ItemDataRole.UserRole, "overview")
-        self._nav_list.addTopLevelItem(overview_item)
-
-        school_setup_item = QTreeWidgetItem(["School Setup"])
-        self._set_navigation_item_icon(school_setup_item, QStyle.StandardPixmap.SP_DirIcon)
-        school_setup_item.setToolTip(0, "School Setup")
-        school_setup_item.setData(0, Qt.ItemDataRole.UserRole, None)
-        self._nav_list.addTopLevelItem(school_setup_item)
-        for label, route, icon_name in (
-            ("School Profile", "school_profile", QStyle.StandardPixmap.SP_FileIcon),
-            ("School Administrators", "school_administrators", QStyle.StandardPixmap.SP_DirOpenIcon),
-            ("Schedule Signatories", "schedule_signatories", QStyle.StandardPixmap.SP_FileDialogInfoView),
-        ):
-            child = QTreeWidgetItem([label])
-            self._set_navigation_item_icon(child, icon_name)
-            child.setToolTip(0, label)
-            child.setData(0, Qt.ItemDataRole.UserRole, route)
-            school_setup_item.addChild(child)
+        dashboard_item = QTreeWidgetItem(["Dashboard"])
+        self._set_navigation_item_icon(dashboard_item, QStyle.StandardPixmap.SP_ComputerIcon)
+        dashboard_item.setToolTip(0, "Dashboard")
+        dashboard_item.setData(0, Qt.ItemDataRole.UserRole, "dashboard")
+        self._nav_list.addTopLevelItem(dashboard_item)
+        self._page_indexes["dashboard"] = self._stack.addWidget(
+            self._build_placeholder_page(
+                "Phase 1",
+                "School workspace dashboard, academic year and session context, summary cards, "
+                "workspace readiness, timetable status, and quick actions.",
+            )
+        )
 
         self._nav_list.currentItemChanged.connect(self._on_navigation_changed)
         self._nav_list.itemClicked.connect(self._on_navigation_item_clicked)
-
         sidebar_layout.addLayout(brand_row)
         sidebar_layout.addWidget(self._nav_list, 1)
 
-        # Main content stack. Route keys keep navigation independent of tree row order.
-        self._page_indexes["overview"] = self._stack.addWidget(self._build_overview_page())
-        self._page_indexes["school_profile"] = self._stack.addWidget(
-            self._school_profile_page
-        )
-        self._page_indexes["school_administrators"] = self._stack.addWidget(
-            self._school_administrators_page
-        )
-        self._page_indexes["schedule_signatories"] = self._stack.addWidget(
-            self._schedule_signatories_page
-        )
-        for index, (title, description) in enumerate(FUTURE_NAVIGATION_MODULES):
-            route = f"future:{index}"
-            item = QTreeWidgetItem([title])
-            self._set_navigation_item_icon(item, QStyle.StandardPixmap.SP_FileDialogContentsView)
-            item.setToolTip(0, f"{title}\n{description}")
-            item.setData(0, Qt.ItemDataRole.UserRole, route)
-            self._nav_list.addTopLevelItem(item)
-            self._page_indexes[route] = self._stack.addWidget(
-                self._build_future_phase_page(title, description)
-            )
+        for group_title, phase, _group_scope, children in NAVIGATION_GROUPS:
+            group_item = QTreeWidgetItem([group_title])
+            self._set_navigation_item_icon(group_item, QStyle.StandardPixmap.SP_DirIcon)
+            group_item.setToolTip(0, group_title)
+            group_item.setData(0, Qt.ItemDataRole.UserRole, None)
+            self._nav_list.addTopLevelItem(group_item)
 
-        self._nav_list.expandItem(school_setup_item)
+            for child_title, route, scope in children:
+                child = QTreeWidgetItem([child_title])
+                self._set_navigation_item_icon(child, QStyle.StandardPixmap.SP_FileIcon)
+                child.setToolTip(0, child_title)
+                child.setData(0, Qt.ItemDataRole.UserRole, route)
+                group_item.addChild(child)
+
+                if route == "school_profile":
+                    page = self._school_profile_page
+                elif route == "school_administrators":
+                    page = self._school_administrators_page
+                elif route == "schedule_signatories":
+                    page = self._schedule_signatories_page
+                elif route == "about_tavio":
+                    page = self._build_overview_page()
+                else:
+                    child_phase = "Phase 0" if route.startswith(("workspace_", "settings_")) else phase
+                    page = self._build_placeholder_page(child_phase, scope)
+                self._page_indexes[route] = self._stack.addWidget(page)
+
+        self._nav_list.topLevelItem(2).setExpanded(True)
         root_layout.addWidget(sidebar)
         root_layout.addWidget(self._stack, 1)
         self.setCentralWidget(root)
-
-        self._nav_list.setCurrentItem(overview_item)
+        self._nav_list.setCurrentItem(dashboard_item)
 
     def _set_navigation_item_icon(
         self,
@@ -315,7 +312,7 @@ class MainWindow(QMainWindow):
         self._brand_row.setSpacing(4 if collapsed else 10)
         self._brand_text_widget.setVisible(not collapsed)
         self._nav_list.setIndentation(0)
-        self._nav_list.setRootIsDecorated(not collapsed)
+        self._nav_list.setRootIsDecorated(False)
         self._nav_list.setStyleSheet("color: transparent;" if collapsed else "")
 
         if self._brand_icon_label is not None:
@@ -346,7 +343,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        header = QLabel(f"{APP_NAME} — Phase 0 Environment & Packaging Verification")
+        header = QLabel(f"About {APP_NAME} — Environment & Packaging Verification")
         header.setObjectName("PageTitle")
         layout.addWidget(header)
 
@@ -409,27 +406,18 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         return page
 
-    def _build_future_phase_page(self, title: str, description: str) -> QWidget:
+    def _build_placeholder_page(self, phase: str, planned_scope: str) -> QWidget:
+        """Build the agreed two-line placeholder for an unimplemented destination."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(12)
-
-        heading = QLabel(title)
-        heading.setObjectName("PageTitle")
-
-        card = QFrame()
-        card.setObjectName("Card")
-        card_layout = QVBoxLayout(card)
-        notice = QLabel(
-            "Not yet implemented in Phase 0.\n\n"
-            f"Planned scope: {description}"
-        )
-        notice.setWordWrap(True)
-        card_layout.addWidget(notice)
-
-        layout.addWidget(heading)
-        layout.addWidget(card)
+        layout.setSpacing(8)
+        status = QLabel(f"Not yet implement ({phase}).")
+        status.setObjectName("SectionTitle")
+        scope = QLabel(f"Planned scope: {planned_scope}")
+        scope.setWordWrap(True)
+        layout.addWidget(status)
+        layout.addWidget(scope)
         layout.addStretch(1)
         return page
 
