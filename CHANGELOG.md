@@ -17,7 +17,7 @@ The entries below summarize code changes present in the repository's `main` bran
 
 ### Documentation
 
-- **Dashboard design refinement:** Recorded the working Dashboard information hierarchy, clarified that the component set and detailed layout remain under review, and replaced the former **Current Version** metric with **Generation Attempts**. The metric counts successful and failed generation attempts and is distinct from saved timetable versions. Documented `timetable_generation` as the separate table direction, with detailed schema and migration work still subject to technical review and authorization. No application code or database schema was changed.
+- **Dashboard design specification:** Moved Dashboard content, component proposals, information hierarchy, academic-year/session selection, and the agreed **Generation Attempts** metric into the dedicated `docs/dashboard_design.md`. Kept `docs/navigation_design.md` focused on the completed navigation design and linked it to the Dashboard specification. No application code or database schema was changed.
 
 - **Workspace lifecycle architecture specification:** Documented the recommended three-file model (portable `.tavio`, computer-local working database, and computer-local recovery snapshot), File command lifecycle flows, atomic workspace-context activation, failure/cancellation invariants, and proposed dirty-state tracking. This is a design specification only; no application code or database schema was changed.
 
