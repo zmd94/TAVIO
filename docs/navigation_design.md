@@ -38,14 +38,23 @@ The agreed navigation direction is a set of main modules with relevant submenus.
 ### 3.1 Dashboard
 - Main landing page after a workspace has been opened successfully.
 
-### 3.2 Workspace
+### 3.2 File
 - New
 - Open
 - Save
 - Save As
 - Exit
 
-Workspace actions manage the active workspace and its file lifecycle. They are not master-data pages.
+The File menu is a **command menu**, not a page-navigation module. Its submenu items execute workspace or application actions; they must not create or display placeholder pages in the main content area.
+
+Command mapping:
+- **New** executes the agreed **NEW TIMETABLE** operation and creates a new workspace.
+- **Open** executes the agreed **OPEN AS** operation and prompts the user to select a `.tavio` workspace file.
+- **Save** explicitly saves the active workspace to its current `.tavio` file.
+- **Save As** saves the active workspace to a separately selected `.tavio` file without modifying its source.
+- **Exit** runs the application's safe exit workflow, including unsaved-change and applicable recovery-failure handling.
+
+The visible labels may remain concise as shown above; the underlying operation must follow the workspace-management decisions. These commands are not master-data pages and must never be routed to the page stack.
 
 ### 3.3 School Setup
 - School Profile
@@ -84,7 +93,7 @@ Workspace actions manage the active workspace and its file lifecycle. They are n
 - Appearance
 - About TAVIO
 
-The module names and submenu labels above describe the intended navigation structure. Their presence in this design document does not mean every listed feature has already been implemented.
+The module names and submenu labels above describe the intended navigation structure. File is intentionally different from the other main items: it dispatches commands instead of navigating to pages. The presence of any menu item does not mean its underlying feature has already been implemented.
 
 ## 4. Dashboard design
 
@@ -168,6 +177,8 @@ Detailed page layouts, field-level behaviour, validation messages, permissions (
 3. Collapsed mode remains visible as a narrow icon strip with hover tooltips.
 4. The sidebar state is remembered between application launches.
 5. Navigation is organized into the modules listed in Section 3.
+6. File is a command menu: New, Open, Save, Save As, and Exit execute actions and never open content pages.
+7. Other main menus and their submenus navigate to pages only when the corresponding page exists and is implemented.
 6. Dashboard is the main landing page after opening a workspace.
 7. Dashboard presents school context, summary cards, workspace readiness, timetable status, and Quick Actions.
 8. Dashboard summaries are based on actual workspace data.
