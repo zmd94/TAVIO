@@ -233,7 +233,7 @@ The proposed principles are:
 
 A cache identity using `workspace_id`, `asset_id`, and/or `sha256` was discussed as a possible strategy. The exact cache key and invalidation mechanism remain open.
 
-A **single active official-logo cache per workspace**, with pending form content managed separately and cache cleanup on workspace disposal, was proposed. The user has not yet confirmed this cache policy. It remains an open decision.
+**Agreed decision:** maintain one active official-logo cache per workspace. Pending form content remains separate from the official cache. Dispose of the workspace's cache when that workspace is disposed or switched out. The exact cache key and invalidation mechanism remain open.
 
 ## 11. Workspace switching, temporary files, and rendering
 
@@ -306,6 +306,42 @@ Do not silently resolve these items in implementation. Bring the trade-offs back
 - Do not include pending logo form state or render caches in workspace dirty tracking.
 - Do not begin implementation until the open technical decisions and test plan have been reviewed and implementation is explicitly authorized.
 
+
+## 16. Shared logo rendering across Qt, printing, and PDF
+
+The following presentation/integration principles were agreed:
+
+1. The Workspace Asset Service supplies the official processed PNG bytes as the base representation.
+2. Qt uses `QImage` as the intermediate image representation. Use `QPixmap` when a widget display requires it.
+3. ReportLab consumes the PNG bytes through `ImageReader` with `BytesIO`; it should not require a permanent PNG file.
+4. Scaling, positioning, alignment, and rendering are responsibilities of the relevant presentation or document layer. They must not mutate the authoritative logo bytes.
+5. Temporary files are permitted only where a library genuinely requires a filesystem path. They remain derived, temporary artifacts and are not authoritative assets.
+
+These principles apply to UI display, timetable preview, printing, and PDF output as relevant. The exact APIs and implementation details remain subject to technical design.
+
+## 17. Shared logo display specification for the five PDF templates
+
+**Agreed decision:** the School Logo must use one shared display specification across all five PDF report types defined in `docs/report_template_v2.md`:
+
+- Jadual Waktu Guru;
+- Jadual Waktu Kelas;
+- Jadual Waktu Bilik Khas;
+- Jadual Waktu Hari;
+- Jadual Waktu Subjek.
+
+The shared specification must ensure that the logo's display-box dimensions, position, and location are consistent across all five report types and on every applicable page. Template-specific header content and ordering must still follow the individual layouts in `docs/report_template_v2.md`; this shared rule does not authorize changing or merging those distinct header arrangements.
+
+The placement follows the general PDF rule in Section 4 of `docs/report_template_v2.md`: the school logo, school name, and address are in the upper-left area of each page. Specific arrangements for Teacher and Class reports remain as documented in Sections 7 and 8 of that specification. For Special Room, Day, and Subject reports, retain the general header rule and the content/title arrangements documented in their respective sections; do not invent additional header elements.
+
+Logo rendering requirements:
+
+- Preserve the logo's original aspect ratio.
+- Fit the logo inside the common display box (contain); do not crop, stretch, or distort it.
+- Use the School Profile logo when available; otherwise use the official TAVIO logo as the fallback, in accordance with Section 4 of `docs/report_template_v2.md`.
+- PDF Preview and the final PDF must display the exact same logo placement and dimensions. The final PDF is the same preview PDF file, not a regenerated document, as specified in `docs/report_generation.md`.
+
+**Still to be specified:** the numerical width and height of the common PDF logo display box, and the precise coordinate values needed by the PDF layout implementation. These values must be decided before implementation; they must not be guessed. The common PDF display specification is separate from any fixed logo dimensions selected for UI contexts.
+
 ---
 
-**Summary:** TAVIO will embed the official School Logo in each workspace as a SQLite BLOB, use one workspace-level shared logo across application views and document output, stage edits until Save succeeds, and apply conservative asset-integrity handling. The generic `workspace_assets` table is the agreed direction. Detailed schema, asset identity, service API, caching policy, migration, and implementation remain open for review.
+**Summary:** TAVIO will embed the official School Logo in each workspace as a SQLite BLOB, use one workspace-level shared logo across application views and document output, stage edits until Save succeeds, and apply conservative asset-integrity handling. The generic `workspace_assets` table is the agreed direction. Detailed schema, asset identity, service API, cache key/invalidation, migration, numeric PDF logo dimensions, and implementation remain open for review.
