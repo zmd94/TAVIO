@@ -15,6 +15,10 @@ The entries below summarize code changes present in the repository's `main` bran
 - **Sidebar interaction and presentation:** Added expanded/collapsed navigation behaviour, custom icons for key menu items, Dashboard positioning, and removal of sidebar tooltips. Save As shares the Save icon.
 - **Navigation verification:** Updated startup/navigation tests to assert the School Setup submenu order, route keys, icons, collapsed startup state, sidebar layout, and removal of tooltips. The complete local test suite passed (114/114 tests), Ruff passed, and manual application testing confirmed that the menus and navigation work correctly.
 
+### Documentation
+
+- **Workspace lifecycle architecture specification:** Documented the recommended three-file model (portable `.tavio`, computer-local working database, and computer-local recovery snapshot), File command lifecycle flows, atomic workspace-context activation, failure/cancellation invariants, and proposed dirty-state tracking. This is a design specification only; no application code or database schema was changed.
+
 ### Added
 
 - **SQLite database foundation:** Introduced database connection configuration, connection and transaction management, database error handling, and a versioned migration runner using `PRAGMA user_version`.
