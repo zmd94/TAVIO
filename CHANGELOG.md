@@ -23,6 +23,10 @@ The entries below summarize code changes present in the repository's `main` bran
 
 - **Dirty-state write-path audit:** Reviewed current database transaction management, repository/service write paths, app settings, logo file operations, and MainWindow dependency construction. Recorded the existing transaction boundary as a candidate for post-commit change tracking and documented read-only connection, settings ownership, and workspace-asset gaps. No application code or database schema was changed.
 
+### Documentation
+
+- **Settings ownership classification:** Classified the live `signatory_label_language` setting as workspace-owned; documented that the legacy `autosave_interval_minutes` key was removed in migration v4 and must remain retired; and assigned general installation/user preferences plus the five-minute recovery cadence to application-local configuration. Added an ownership rule for future settings.
+
 ### Added
 
 - **SQLite database foundation:** Introduced database connection configuration, connection and transaction management, database error handling, and a versioned migration runner using `PRAGMA user_version`.
