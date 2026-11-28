@@ -162,6 +162,53 @@ The UI layer should dispatch these commands to a dedicated application/workspace
 
 The command flow must respect the agreed SAVE / DON'T SAVE / CANCEL decisions before NEW TIMETABLE and OPEN AS, and the corresponding safe-exit decisions before EXIT. A cancelled or failed command must leave the active workspace and its displayed pages usable and unchanged. SAVE and SAVE AS are operations, not navigation destinations.
 
+### 4.5 Active working database versus the portable source file
+
+A key persistence issue must be resolved before implementation.
+
+The existing repositories commit changes directly to the SQLite database during normal operations. If TAVIO opens a user's .tavio file as the live DatabaseManager target, ordinary form saves and repository transactions would modify that file before the user chooses the File → Save command. That would contradict the agreed rule that opening a workspace must not silently modify its source and that only explicit SAVE or SAVE AS commits changes to the portable package.
+
+**Recommended architecture for review:** use a computer-local active working database for each open workspace.
+
+- **Portable workspace path:** the user's .tavio file. It remains the last explicitly saved version.
+- **Active working path:** a private local SQLite working copy associated with the workspace ID. Existing repositories and services operate on this database, so normal form operations can continue using SQLite transactions without modifying the portable source file.
+- **Recovery path:** the computer-local .bak recovery snapshot, produced from the active working database according to the agreed five-minute recovery policy. It is distinct from both the portable source and the active working copy.
+- **SAVE:** create and validate a candidate from the active working database, then safely replace the portable workspace file. Do not discard the working database until the save has been verified.
+- **SAVE AS:** create a validated portable destination from the active working database. Keep the original source unchanged. The active workspace identity remains the same because SAVE AS is a copy of the same workspace, not creation of a new workspace.
+- **OPEN AS:** validate the selected portable file, create/open its local working copy, and build a candidate context. Activate that context only after all checks succeed.
+- **NEW TIMETABLE:** create a new local working database with a new workspace ID, copying only the three agreed school-information sections from the current context.
+
+This working-copy approach is a technical recommendation derived from the existing repository's immediate SQLite transaction model and the agreed explicit-save behaviour. It is **not yet an approved implementation decision**. Review its storage footprint, cleanup, startup recovery, file permissions, and behavior when the portable file is on removable storage before implementation.
+
+### 4.6 WorkspaceContext and WorkspaceManager responsibilities
+
+The following responsibilities are proposed; exact module names and public method signatures remain subject to detailed design.
+
+**WorkspaceContext** represents one fully prepared active workspace and owns:
+- workspace ID and display/file metadata;
+- portable source path, when one exists;
+- local active working-database path;
+- the DatabaseManager bound to that working database;
+- repositories and application services constructed from that manager;
+- workspace-owned asset access;
+- dirty/last-explicit-save state needed by command workflows.
+
+A context must not be partially rebound to another database. Its repositories and services all belong to the same workspace ID and working database.
+
+**WorkspaceManager** coordinates lifecycle operations and owns:
+- creating a new empty workspace;
+- opening and validating a portable .tavio file;
+- preparing a candidate working copy and candidate context;
+- activating a candidate context only after successful preparation;
+- creating NEW TIMETABLE from the permitted retained sections;
+- saving and saving-as through validated candidate files;
+- coordinating recovery checks and safe context shutdown;
+- preserving the previous active context if a candidate operation fails.
+
+The manager should not contain UI widgets or show dialogs directly. It should return typed outcomes/errors for a UI command controller to present to the user.
+
+**File command controller** (provisional name) connects File menu actions to WorkspaceManager and application shutdown services. It owns user interaction sequencing (SAVE / DON'T SAVE / CANCEL, file pickers, confirmations) but delegates database and file safety to the lifecycle services. It must not implement persistence logic inside QTreeWidget callbacks.
+
 ## 5. Embedded workspace assets
 
 The approved direction is that the logo is stored within the `.tavio` workspace database.
