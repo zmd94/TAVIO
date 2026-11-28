@@ -1,8 +1,8 @@
 # TAVIO – UI Navigation and Dashboard Design Decisions
 
-**Document status:** Agreed UI design direction  
-**Scope:** Navigation structure and Dashboard concept only  
-**Implementation status:** Design decisions; no application code or database changes are authorized by this document.
+**Document status:** Navigation structure agreed; Dashboard layout remains under design review  
+**Scope:** Navigation structure and Dashboard design direction  
+**Implementation status:** Design record only; no application code, database schema, or migration changes are authorized by this document.
 
 ## 1. Design goals
 
@@ -97,12 +97,12 @@ The module names and submenu labels above describe the intended navigation struc
 
 ## 4. Dashboard design
 
-Dashboard is the main landing page after a workspace opens successfully. It should provide a useful overview of the currently selected school workspace without requiring users to open several modules.
+Dashboard is the main landing page after a workspace opens successfully. It should provide a useful overview of the currently selected school workspace without requiring users to open several modules. The component set and detailed arrangement remain subject to review; listing a component in this document does not by itself make that component final.
 
 ### 4.1 School information
 
 Display relevant workspace context, including:
-- School name and logo.
+- School name and the school's official logo. This is the school identity asset, not the TAVIO application logo used for sidebar branding.
 - Selected academic year.
 - Selected session.
 
@@ -139,6 +139,29 @@ Provide shortcuts to commonly used destinations, such as:
 - Reports.
 
 Quick Actions navigate to existing functions; they must not bypass the normal validation and confirmation rules of those functions.
+
+### 4.6 Dashboard layout and information hierarchy (working proposal)
+
+The current layout direction is to organize the Dashboard in the following hierarchy:
+
+1. **Workspace context area:** school name and official school logo, with the academic-year and session selectors placed near the top.
+2. **Summary area:** compact cards for the key school-data counts and timetable/generation indicators.
+3. **Operational overview:** workspace-readiness information and the selected academic-year/session timetable status.
+4. **Quick Actions:** shortcuts to the commonly used modules or workflows.
+
+This is a working arrangement to guide the next design discussion, not a locked component list or final pixel-level layout. The exact card set, grouping, order, dimensions, and responsive behaviour remain open for review. Components may be retained, changed, removed, or added after they are discussed.
+
+### 4.7 Generation Attempts metric
+
+The Dashboard metric previously referred to as **Current Version** is named **Generation Attempts**.
+
+- It represents the total number of timetable-generation attempts for the relevant selected academic year and session.
+- The count includes both successful and failed generation attempts; it is not the number of saved timetable versions.
+- The intended data source is a dedicated `timetable_generation` record for each generation attempt.
+- The existing `timetable_versions` table continues to represent saved timetable versions. It must not be used as the sole source for counting generation attempts because failed attempts may not create a saved timetable version.
+- The proposed `timetable_generation` table is separate from `timetable_versions`. Adding it should be handled through a new migration (Migration v5 is the current candidate), not by rewriting historical migrations or changing the stable timetable-version structure.
+- The table's detailed columns, status lifecycle, indexes, retention policy, and transaction behaviour still require a separate technical design review. This documentation does not approve a SQL schema or authorize implementation.
+- The label and count semantics are agreed. Whether a separate timestamp indicator (for example, the most recent generation attempt) should appear on the Dashboard, and its final label/semantics, remain open.
 
 ## 5. Academic year and session selection
 
@@ -180,7 +203,10 @@ Detailed page layouts, field-level behaviour, validation messages, permissions (
 6. File is a command menu: New, Open, Save, Save As, and Exit execute actions and never open content pages.
 7. Other main menus and their submenus navigate to pages only when the corresponding page exists and is implemented.
 6. Dashboard is the main landing page after opening a workspace.
-7. Dashboard presents school context, summary cards, workspace readiness, timetable status, and Quick Actions.
-8. Dashboard summaries are based on actual workspace data.
-9. Academic year and session selectors filter the Dashboard's displayed context.
-10. This is a design record, not implementation authorization.
+7. Dashboard is organized around workspace context, summary information, operational overview, and Quick Actions; the detailed arrangement remains a working proposal.
+8. The Dashboard component list is not final; components may be retained, changed, removed, or added through further discussion.
+9. Dashboard summaries are based on actual workspace data.
+10. Academic year and session selectors filter the Dashboard's displayed context.
+11. The metric label **Generation Attempts** replaces **Current Version** and counts all generation attempts, successful or failed; it is distinct from saved timetable versions.
+12. A separate `timetable_generation` table is the agreed data-model direction for recording attempts, with its detailed schema and a future migration still requiring technical review and authorization.
+13. This is a design record, not implementation authorization.
