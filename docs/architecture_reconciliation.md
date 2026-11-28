@@ -336,6 +336,101 @@ This is an approved design direction, not permission to edit application code or
 - Preserve the existing SQLite foundation and existing data wherever possible.
 - Bring unresolved technical choices back for review before implementation.
 
+
+### 4.7 Workspace lifecycle state machine and File command flows
+
+The three-file model is the recommended basis for the lifecycle design:
+
+| Artifact | Role | May ordinary page edits modify it? |
+|---|---|---|
+| Portable `.tavio` | Last explicitly saved, transferable workspace | No |
+| Local working database | Active editable state for this computer | Yes |
+| Local recovery `.bak` | Latest successfully written recovery snapshot | Only the recovery process replaces it, atomically |
+
+The local working database and recovery snapshot are application-managed files. Their locations must be derived from application-local paths and workspace identity, not from the portable file's folder. A workspace that has never been saved still has a workspace ID and a local working database; it therefore can be recovered before the user chooses a `.tavio` destination.
+
+**Startup / reopen last workspace**
+
+1. Read the last-opened portable path from application-local settings.
+2. If no workspace has ever been created, create a new empty local working workspace with a new workspace ID. Do not invent a portable `.tavio` file until the user saves.
+3. If a last-opened path exists, verify that it still exists and is accessible. If it is missing, moved, invalid, or incompatible, ask the user to locate/open a valid workspace or cancel. Do not silently substitute a new empty workspace.
+4. Validate the portable source without modifying it. Prepare a local working database from the source using a safe SQLite backup mechanism.
+5. Check for local recovery data keyed by workspace ID and verify its identity/metadata before offering recovery. If a valid recovery snapshot is newer than the working copy's saved baseline, offer the agreed RESTORE / KEEP CURRENT / CANCEL choices. RESTORE prepares a candidate working database from the recovery snapshot; KEEP CURRENT uses the freshly prepared working copy and follows the agreed recovery-retention policy; CANCEL aborts startup or workspace activation without activating the candidate.
+6. Build all repositories/services against the candidate working database and activate the complete context only after preparation succeeds.
+7. If any preparation step fails, retain the existing context (if one exists), source file, and valid recovery material.
+
+The implementation must distinguish a genuinely first launch (no last-workspace reference has ever been recorded) from a stale or broken last-workspace reference. A missing path is not evidence that the user wants a blank workspace.
+
+**NEW TIMETABLE**
+
+1. Run the current-workspace unsaved-change decision: SAVE, DON'T SAVE, or CANCEL. SAVE must complete successfully before continuing; a failed SAVE aborts the command. DON'T SAVE discards the current unsaved working state only after the new workspace is successfully prepared; CANCEL changes nothing.
+2. Prepare a new local working database with a newly generated workspace ID.
+3. Copy only SCHOOL PROFILE, SCHOOL ADMINISTRATORS, and SCHEDULE SIGNATORIES from the current workspace, using an explicit allowlist. Do not copy timetable, master data, or other workspace data.
+4. Validate the new working database and build its complete candidate context.
+5. Activate it atomically at the application level, update the last-opened workspace state to represent an unsaved/new workspace, then retire the old context safely.
+6. If preparation fails, keep the old context active. Do not leave a half-created workspace as active.
+
+**OPEN AS**
+
+1. Run the same SAVE / DON'T SAVE / CANCEL decision for the current workspace. A failed SAVE aborts; DON'T SAVE does not destroy the current context until the candidate is ready; CANCEL leaves everything unchanged.
+2. Select and validate the candidate `.tavio` file, including format, compatibility, SQLite integrity, foreign keys, schema, and workspace ID.
+3. Prepare a local working database and check recovery for that workspace ID.
+4. Resolve any recovery prompt before activation. A recovery mismatch must never be applied to the candidate.
+5. Build candidate repositories/services, then activate the candidate context only after all preparation succeeds.
+6. Record the selected portable path as the last-opened workspace and retire the previous context safely.
+7. Any cancel or failure leaves the current workspace, its pages, and its unsaved working data unchanged.
+
+**SAVE**
+
+1. If the active workspace has no portable source path yet, ask for a destination and follow SAVE AS creation semantics.
+2. Ensure the active working database is in a consistent state and obtain a transactionally consistent SQLite backup into a temporary candidate in the destination folder.
+3. Validate the candidate (integrity, foreign keys, schema/package compatibility, workspace ID, and required assets).
+4. Replace the portable destination using a same-volume atomic replacement strategy where supported. Preserve the previous valid destination if candidate creation, validation, or replacement fails.
+5. Verify the resulting destination. Only after successful verification update the saved baseline/dirty state and last-explicit-save metadata.
+6. Do not delete the recovery snapshot before the new portable file has been fully verified. Recovery cleanup follows the agreed recovery policy and must itself be safe.
+7. A failed SAVE leaves the active working database and last valid recovery snapshot intact and reports failure; it must not claim the workspace is saved.
+
+**SAVE AS**
+
+1. Ask for a destination. If it already exists, require explicit replace confirmation before touching it.
+2. Create and validate a candidate from the active working database, then safely replace/create the destination.
+3. Never modify the previous portable source as part of SAVE AS. On success, the destination becomes the active workspace's new portable source path and last-opened path; the workspace ID remains unchanged.
+4. The local working database remains active; do not reopen or rebind repositories just because the portable path changed.
+5. Keep recovery associated with the unchanged workspace ID. Do not treat SAVE AS as NEW TIMETABLE or create a new recovery identity.
+6. On failure or cancellation, retain the previous source path, active context, working data, and recovery data.
+
+**EXIT**
+
+1. Apply the agreed unsaved-change decision: SAVE, DON'T SAVE, or CANCEL. A failed SAVE prevents a clean exit unless the user explicitly chooses a supported discard path.
+2. If autosave has failed since the last successful explicit SAVE, show the agreed warning at EXIT. Do not imply recovery is current when the latest autosave failed.
+3. Stop and await recovery/background work; checkpoint/close SQLite connections according to the selected journal-mode strategy.
+4. Persist the last-opened workspace reference and close the active context safely.
+5. A clean exit must not delete the only valid recovery snapshot for a workspace with unsaved changes.
+
+**Atomic activation and disposal invariant**
+
+Prepare a complete candidate context before swapping the active-context reference. The UI must not observe a partially initialized context or a mixture of old and new repositories. On candidate failure/cancellation, dispose only candidate resources and retain the old active context. After successful activation, stop workers and close connections belonging to the previous context before deleting or replacing its local working files.
+
+### 4.8 Dirty-state and saved-baseline tracking
+
+The File command workflow needs a reliable answer to whether the active working database contains changes not yet explicitly saved to its portable source. A page being visited, a form being opened, or a local recovery snapshot being written must not by itself mark the workspace as explicitly saved.
+
+The current application commits repository/service writes directly to SQLite. Therefore, dirty tracking must be designed around successful data mutations, not merely around widget state.
+
+**Recommended design direction for review:**
+- Establish a saved baseline when a portable workspace is loaded into a new working database, and after a successful SAVE or SAVE AS.
+- Route or instrument every successful workspace-data write transaction through a central DatabaseManager/unit-of-work boundary that can advance a workspace change generation. A rolled-back or failed transaction must not advance it.
+- Record the generation associated with the last successful explicit save. The workspace is dirty when the current successful-write generation differs from that saved generation.
+- Recovery snapshots preserve the generation metadata but do not reset the saved generation or mark the workspace clean.
+- A new unsaved workspace begins with a defined initial baseline; its creation alone should not force a misleading SAVE prompt if it contains no user-entered changes. User edits make it dirty.
+- Before implementation, inventory every write path (repositories, services, direct SQL, migrations, settings, and asset operations) and ensure workspace-data writes cannot bypass the tracking boundary. Application-local settings and recovery bookkeeping must not mark the workspace dirty.
+- If the current code cannot provide one reliable transaction boundary without invasive changes, return with alternatives and trade-offs rather than adding incomplete dirty flags.
+
+A plain SQLite `PRAGMA data_version` check is not sufficient by itself for this purpose because its semantics do not provide a reliable count of writes made by the same connection. File timestamps or raw database-file hashes are also not accepted as the sole dirty-state mechanism.
+
+The exact implementation mechanism, transaction API, and treatment of schema migrations remain open until the write-path inventory and tests are reviewed.
+
+
 ---
 
 **Summary:** TAVIO will move toward a native SQLite `.tavio` workspace with workspace-owned assets embedded in the database and a dedicated workspace lifecycle/context layer. This is the agreed direction; detailed technical design and implementation approval remain separate steps.
