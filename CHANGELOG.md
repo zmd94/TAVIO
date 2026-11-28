@@ -19,6 +19,10 @@ The entries below summarize code changes present in the repository's `main` bran
 
 - **Workspace lifecycle architecture specification:** Documented the recommended three-file model (portable `.tavio`, computer-local working database, and computer-local recovery snapshot), File command lifecycle flows, atomic workspace-context activation, failure/cancellation invariants, and proposed dirty-state tracking. This is a design specification only; no application code or database schema was changed.
 
+### Documentation
+
+- **Dirty-state write-path audit:** Reviewed current database transaction management, repository/service write paths, app settings, logo file operations, and MainWindow dependency construction. Recorded the existing transaction boundary as a candidate for post-commit change tracking and documented read-only connection, settings ownership, and workspace-asset gaps. No application code or database schema was changed.
+
 ### Added
 
 - **SQLite database foundation:** Introduced database connection configuration, connection and transaction management, database error handling, and a versioned migration runner using `PRAGMA user_version`.
