@@ -147,6 +147,21 @@ The current fixed-path database manager should be adapted through a deliberate d
 
 Repositories and services must be constructed against the correct active context. Avoid mutating a global path while existing repositories still hold connections to the previous database.
 
+### 4.4 File menu command dispatch
+
+The File menu is not a page-navigation module. Its submenu entries must be connected to application/workspace command handlers and must never be inserted into the main page stack or display placeholder pages.
+
+The existing visible commands map to the agreed workspace operations as follows:
+- **New** → NEW TIMETABLE: create a new workspace and apply the agreed data-retention rules.
+- **Open** → OPEN AS: select, validate, and activate a `.tavio` workspace without damaging the currently active workspace if opening fails.
+- **Save** → SAVE: commit the active workspace to its current `.tavio` file using the safe candidate-and-verify sequence.
+- **Save As** → SAVE AS: write the active workspace to a separately selected destination without modifying its source; handle an existing destination and its recovery identity safely.
+- **Exit** → run the application shutdown workflow, including unsaved-change decisions and the agreed autosave-failure warning conditions.
+
+The UI layer should dispatch these commands to a dedicated application/workspace service (or a clearly bounded command-handler layer). The handlers own validation, prompts, persistence and failure handling; the navigation tree only initiates the command. Do not put database lifecycle logic directly into navigation-item callbacks.
+
+The command flow must respect the agreed SAVE / DON'T SAVE / CANCEL decisions before NEW TIMETABLE and OPEN AS, and the corresponding safe-exit decisions before EXIT. A cancelled or failed command must leave the active workspace and its displayed pages usable and unchanged. SAVE and SAVE AS are operations, not navigation destinations.
+
 ## 5. Embedded workspace assets
 
 The approved direction is that the logo is stored within the `.tavio` workspace database.
@@ -253,12 +268,13 @@ Before implementation, prepare and review designs for:
 9. Removal of the legacy timetable-draft autosave schema and separation of the single whole-workspace recovery mechanism from portable workspace data.
 10. SAVE, SAVE AS, computer-local recovery, migration, and interrupted replacement failure handling.
 11. Test plan for crash, power loss, disk full, permission errors, USB/network/removable storage, invalid files, local recovery identity checks, and multiple workspace switching. Do not add cross-computer locking or synchronization tests as product requirements.
+12. File-menu command dispatch tests: New, Open, Save, Save As, and Exit invoke their respective workflows and never create or display page-stack destinations; cancelled/failed operations preserve the active workspace.
 
 
 
 ### 8.1 Migration v4 — legacy autosave schema cleanup
 
-The migration v4 decision is recorded in [Workspace and Data File Management Decisions](data_file_management.md#17-existing-timetable-autosave-schema-cleanup--planned-migration-v4).
+The migration v4 decision is recorded in [Workspace and Data Management Decisions](data_management.md#17-existing-timetable-autosave-schema-cleanup--planned-migration-v4).
 
 The migration is limited to removing the unused legacy timetable autosave table, its two validation triggers, and the old 10-minute `app_settings` entry. The whole-workspace recovery interval is 5 minutes and is held in application-local configuration, not in the workspace database. Historical migrations remain immutable.
 
