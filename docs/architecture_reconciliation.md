@@ -121,11 +121,27 @@ TAVIO Application
 
 Keep application-local operational data separate from school workspace data.
 
-Potential application-local items include logs, application preferences, last-opened workspace reference, lock/coordination files, and temporary staging files. These must not contain authoritative school data that should travel with the `.tavio` package.
+Potential application-local items include logs, application preferences, last-opened workspace reference, lock/coordination files, recovery metadata, local working databases, and temporary staging files. These must not contain authoritative school data that should travel with the `.tavio` package.
 
-School profile, master data, assignments, timetables, report configuration, and school-owned assets belong to the active workspace.
+School profile, master data, assignments, timetables, report configuration, school-owned assets, and settings that describe or configure the school workspace belong to the active workspace.
 
-The exact list of application-local settings versus workspace settings must be checked against current `app_settings` usage before implementation.
+#### Current `app_settings` inventory and ownership
+
+The current source tree has one live application-level repository usage of `app_settings`:
+
+| Setting key | Current purpose | Ownership decision |
+|---|---|---|
+| `signatory_label_language` | EN/MS display language for the Prepared By / Verified By labels on the Schedule Signatories page | **Workspace-owned** |
+
+Rationale: the setting is currently persisted in the same SQLite database as the workspace's schedule-signatory configuration, is edited within that workspace feature, and determines how that workspace's signatory roles are presented. It should travel with the `.tavio` file and its successful change should count as a workspace mutation for dirty-state and SAVE purposes.
+
+The schema v1 seed also introduced `autosave_interval_minutes` (10 minutes). Migration v4 removes that obsolete key together with the legacy timetable autosave table. It is not a live setting and must not be restored or repurposed. The agreed whole-workspace recovery cadence is five minutes and belongs to application-local operational policy/configuration, not to an individual workspace.
+
+No current implementation was found using `app_settings` for general application preferences. Keep future installation/computer-specific preferences outside the workspace database, including (when implemented) theme, sidebar/window presentation state, last-opened workspace reference, recent-file history, application-wide UI preferences, logging configuration, and recovery scheduling/metadata.
+
+**Ownership rule for future settings:** a value belongs in the workspace only when it describes, configures, or affects the school/workspace data or its workspace-specific presentation and must follow that workspace to another computer. A value that configures this TAVIO installation, this Windows user, or local operational behavior belongs in application-local configuration. Do not decide ownership solely from a generic setting name or from the fact that a value is convenient to store in SQLite.
+
+New settings must be classified explicitly before adding a key or persistence path. Workspace-owned settings must use the active workspace context and participate in workspace dirty tracking; application-local settings must not alter workspace dirty state or be copied by NEW TIMETABLE unless a separate product decision explicitly requires it.
 
 ### 4.2 Workspace context and switching
 
@@ -218,7 +234,7 @@ An initial read-only audit of the current `main` branch inspected `DatabaseManag
 
 - `SchoolProfileRepository.upsert_profile()` and `update_logo_path()` perform writes through `DatabaseManager.transaction(immediate=True)`.
 - `SchoolAdministratorRepository` add, edit, active-state, reorder, and delete operations use `DatabaseManager.transaction(immediate=True)`.
-- `ScheduleSignatoryRepository.update_setting()` and `set_label_language()` use `DatabaseManager.transaction(immediate=True)`.
+- `ScheduleSignatoryRepository.update_setting()` and `set_label_language()` use `DatabaseManager.transaction(immediate=True)`. The live `signatory_label_language` key is classified as workspace-owned because it configures the signatory-role presentation for the active workspace.
 - The corresponding services delegate persistence to these repositories; the inspected service methods do not issue direct SQL writes themselves.
 - The inspected repository uses of `DatabaseManager.connection()` are SELECT/read paths.
 - Schema migrations are applied through `DatabaseManager.initialize()` and the migration runner using a connection-level, explicit migration transaction. Migration writes must not be confused with user edits or advance the active workspace's dirty generation.
@@ -233,7 +249,7 @@ However, the current manager does not yet expose a dirty-state/change-generation
 **Important gaps and design constraints**
 
 1. `DatabaseManager.connection()` yields a normal writable SQLite connection in autocommit mode. The inspected repository call sites use it for reads, but the API itself does not enforce read-only use. A future write could bypass transaction-based tracking. Before implementation, decide whether to make ordinary connection access query-only/read-only and provide a separate explicit write unit-of-work, while preserving a dedicated migration path.
-2. `app_settings` currently includes at least the schedule-signatory label-language preference. Its ownership must be classified. If it is workspace-owned, changing it must count as a workspace edit; application-local preferences must not be stored or tracked as workspace mutations.
+2. The current live `app_settings` usage is classified: `signatory_label_language` is workspace-owned and must count as a workspace mutation. The old `autosave_interval_minutes` key was removed by migration v4 and must not return; the agreed five-minute recovery cadence is application-local. General installation/user preferences belong outside the workspace database.
 3. The school-logo workflow writes a machine-local file outside SQLite. It must be redesigned as a workspace-asset operation with coordinated staging/commit semantics when assets are embedded in the workspace. Do not treat the existing logo upload as covered merely because its final `logo_path` update uses a repository transaction.
 4. The current `DatabaseManager.transaction()` API does not distinguish user-data writes, application maintenance, migrations, or recovery bookkeeping. The future tracking boundary needs an explicit policy so only committed workspace-data changes advance the workspace generation.
 5. A successful transaction may contain no effective data change. The implementation should decide whether generation changes are based on actual SQLite change counts or an explicit mutation signal, and test no-op updates, trigger effects, rollback, and commit failure. Do not use widget dirty flags as the authoritative source.
@@ -241,7 +257,7 @@ However, the current manager does not yet expose a dirty-state/change-generation
 
 **Recommended next design step**
 
-Before implementing dirty-state, complete a write-path inventory whenever new repositories or modules are added, define a read-only contract for non-transactional connections, classify every persisted setting as workspace-owned or application-local, and design an explicit post-commit mutation notification at the DatabaseManager/unit-of-work boundary. Add focused tests for successful commit, rollback, failed commit, no-op write, read-only enforcement, migrations, and workspace-asset changes.
+Before implementing dirty-state, complete a write-path inventory whenever new repositories or modules are added, define a read-only contract for non-transactional connections, preserve the setting-ownership rule in Section 4.1 for every new setting, and design an explicit post-commit mutation notification at the DatabaseManager/unit-of-work boundary. Add focused tests for successful commit, rollback, failed commit, no-op write, read-only enforcement, migrations, and workspace-asset changes.
 
 This audit is based on the current source files inspected on `main`; it is not proof that future modules cannot add new write paths. No application code, schema, or migration was changed as part of this audit.
 
