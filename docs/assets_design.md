@@ -340,8 +340,10 @@ Logo rendering requirements:
 - Use the School Profile logo when available; otherwise use the official TAVIO logo as the fallback, in accordance with Section 4 of `docs/report_template_v2.md`.
 - PDF Preview and the final PDF must display the exact same logo placement and dimensions. The final PDF is the same preview PDF file, not a regenerated document, as specified in `docs/report_generation.md`.
 
-**Still to be specified:** the numerical width and height of the common PDF logo display box, and the precise coordinate values needed by the PDF layout implementation. These values must be decided before implementation; they must not be guessed. The common PDF display specification is separate from any fixed logo dimensions selected for UI contexts.
+**Agreed initial dimensions:** use a common PDF logo display box of **25 mm wide × 20 mm high** across all five report types. Preserve the logo's aspect ratio and fit it inside this box using `contain`; do not crop, stretch, or distort it. These are the initial agreed dimensions and may be reviewed later when Master Data is available and generated timetable/report layouts can be assessed against real content. Any revision should be made deliberately and applied consistently to all five PDF templates.
+
+The exact coordinate values needed by the PDF layout implementation remain a technical design detail to be specified during implementation. The common PDF display specification is separate from any fixed logo dimensions selected for UI contexts.
 
 ---
 
-**Summary:** TAVIO will embed the official School Logo in each workspace as a SQLite BLOB, use one workspace-level shared logo across application views and document output, stage edits until Save succeeds, and apply conservative asset-integrity handling. The generic `workspace_assets` table is the agreed direction. Detailed schema, asset identity, service API, cache key/invalidation, migration, numeric PDF logo dimensions, and implementation remain open for review.
+**Summary:** TAVIO will embed the official School Logo in each workspace as a SQLite BLOB, use one workspace-level shared logo across application views and document output, stage edits until Save succeeds, and apply conservative asset-integrity handling. The generic `workspace_assets` table is the agreed direction. Detailed schema, asset identity, service API, cache key/invalidation, migration, final PDF logo coordinates and implementation remain open for review.
