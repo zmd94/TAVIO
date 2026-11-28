@@ -209,6 +209,43 @@ The manager should not contain UI widgets or show dialogs directly. It should re
 
 **File command controller** (provisional name) connects File menu actions to WorkspaceManager and application shutdown services. It owns user interaction sequencing (SAVE / DON'T SAVE / CANCEL, file pickers, confirmations) but delegates database and file safety to the lifecycle services. It must not implement persistence logic inside QTreeWidget callbacks.
 
+
+### 4.9 Repository write-path audit and dirty-state implications
+
+An initial read-only audit of the current `main` branch inspected `DatabaseManager`, SQLite connection configuration, the three current repositories, their services, the school-logo workflow, application startup, and MainWindow dependency construction.
+
+**Observed write paths**
+
+- `SchoolProfileRepository.upsert_profile()` and `update_logo_path()` perform writes through `DatabaseManager.transaction(immediate=True)`.
+- `SchoolAdministratorRepository` add, edit, active-state, reorder, and delete operations use `DatabaseManager.transaction(immediate=True)`.
+- `ScheduleSignatoryRepository.update_setting()` and `set_label_language()` use `DatabaseManager.transaction(immediate=True)`.
+- The corresponding services delegate persistence to these repositories; the inspected service methods do not issue direct SQL writes themselves.
+- The inspected repository uses of `DatabaseManager.connection()` are SELECT/read paths.
+- Schema migrations are applied through `DatabaseManager.initialize()` and the migration runner using a connection-level, explicit migration transaction. Migration writes must not be confused with user edits or advance the active workspace's dirty generation.
+- `SchoolProfileService.upload_logo()` and `remove_logo()` perform filesystem mutations in the application-local assets directory and then update `school_profile.logo_path` through the repository. This is a multi-resource operation; SQLite transaction tracking alone cannot represent its full consistency or failure state.
+
+**Central transaction boundary**
+
+The existing `DatabaseManager.transaction()` context manager owns BEGIN, COMMIT, ROLLBACK, and connection closure. This is a promising instrumentation point: a future change-generation notification can be emitted only after a successful commit. A transaction that raises or fails to commit must not advance the generation.
+
+However, the current manager does not yet expose a dirty-state/change-generation callback or classify transactions by purpose. The audit therefore supports the central-boundary approach as a candidate, not as an implemented feature.
+
+**Important gaps and design constraints**
+
+1. `DatabaseManager.connection()` yields a normal writable SQLite connection in autocommit mode. The inspected repository call sites use it for reads, but the API itself does not enforce read-only use. A future write could bypass transaction-based tracking. Before implementation, decide whether to make ordinary connection access query-only/read-only and provide a separate explicit write unit-of-work, while preserving a dedicated migration path.
+2. `app_settings` currently includes at least the schedule-signatory label-language preference. Its ownership must be classified. If it is workspace-owned, changing it must count as a workspace edit; application-local preferences must not be stored or tracked as workspace mutations.
+3. The school-logo workflow writes a machine-local file outside SQLite. It must be redesigned as a workspace-asset operation with coordinated staging/commit semantics when assets are embedded in the workspace. Do not treat the existing logo upload as covered merely because its final `logo_path` update uses a repository transaction.
+4. The current `DatabaseManager.transaction()` API does not distinguish user-data writes, application maintenance, migrations, or recovery bookkeeping. The future tracking boundary needs an explicit policy so only committed workspace-data changes advance the workspace generation.
+5. A successful transaction may contain no effective data change. The implementation should decide whether generation changes are based on actual SQLite change counts or an explicit mutation signal, and test no-op updates, trigger effects, rollback, and commit failure. Do not use widget dirty flags as the authoritative source.
+6. The inspected MainWindow constructs repositories and services once from the startup DatabaseManager and passes them into pages. This confirms that a workspace switch must rebuild or replace the complete dependency graph, not merely change a path on an existing manager.
+
+**Recommended next design step**
+
+Before implementing dirty-state, complete a write-path inventory whenever new repositories or modules are added, define a read-only contract for non-transactional connections, classify every persisted setting as workspace-owned or application-local, and design an explicit post-commit mutation notification at the DatabaseManager/unit-of-work boundary. Add focused tests for successful commit, rollback, failed commit, no-op write, read-only enforcement, migrations, and workspace-asset changes.
+
+This audit is based on the current source files inspected on `main`; it is not proof that future modules cannot add new write paths. No application code, schema, or migration was changed as part of this audit.
+
+
 ## 5. Embedded workspace assets
 
 The approved direction is that the logo is stored within the `.tavio` workspace database.
