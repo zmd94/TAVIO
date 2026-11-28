@@ -1,67 +1,64 @@
-# TAVIO – UI Navigation and Dashboard Design Decisions
+# TAVIO – UI Navigation Design Decisions
 
-**Document status:** Navigation structure agreed  
-**Scope:** Sidebar and main navigation structure  
-**Implementation status:** Design record only; no application code, database schema, or migration changes are authorized by this document.
+**Document status:** Navigation layout and hierarchy agreed; button and submenu functionality remains under design.  
+**Scope:** Sidebar appearance, navigation hierarchy, menu labels, ordering, and placement.  
+**Implementation status:** Design record only; this document does not authorize application-code, database-schema, or migration changes.
 
 ## 1. Design goals
 
-The TAVIO interface should feel modern, capable, clear, and user-friendly. Navigation should remain predictable as the application grows to include more modules. The design should make good use of desktop screen space without hiding the main navigation completely.
+The TAVIO interface should feel modern, capable, clear, and user-friendly. Navigation should remain predictable as the application grows to include more modules. The design should make good use of desktop screen space while keeping the main navigation readily accessible.
 
-## 2. Modern Ribbon-style Collapsible Sidebar
+## 2. Modern ribbon-style collapsible sidebar
 
-The primary navigation will use a modern ribbon-style sidebar on the left side of the application.
+The primary navigation uses a modern ribbon-style sidebar on the left side of the application.
 
 ### 2.1 Expanded mode
 
 - Display each main menu item with its icon and text label.
-- Allow users to access the relevant submenu or module.
-- Keep the hierarchy clear and visually consistent.
+- Present the menu hierarchy clearly and consistently.
+- Keep the sidebar layout consistent when users move between modules.
 
 ### 2.2 Collapsed mode
 
 - Keep a narrow icon-only strip visible on the left; do not hide the sidebar completely.
-- Show the menu name through a tooltip when the pointer hovers over an icon.
-- Allow users to expand the sidebar through a dedicated control.
+- Provide a dedicated control to expand the sidebar.
+- Preserve the agreed icon placement and visual alignment.
 
-### 2.3 State and navigation behaviour
+### 2.3 Layout and state
 
 - Provide a dedicated expand/minimize control near the top of the sidebar.
-- Preserve the selected expanded or collapsed state after the application is closed and reopened.
-- Keep the sidebar state consistent when users navigate between modules.
-- On smaller windows, the layout may adapt to use a temporary navigation panel where appropriate.
+- Remember the selected expanded or collapsed state between application launches.
+- Keep the sidebar layout consistent when users navigate between modules.
+- Allow the overall layout to adapt to smaller application-window sizes where appropriate.
 
 ## 3. Main navigation structure
 
-The agreed navigation direction is a set of main modules with relevant submenus. The proposed structure is:
+The agreed navigation design establishes the main menu groups, their labels, submenu labels, ordering, and placement. The structure is recorded here as a navigation and layout specification.
 
 ### 3.1 Dashboard
-- Main landing page after a workspace has been opened successfully.
+
+- Dashboard
+
+Dashboard is the main landing-page destination after a workspace has been opened successfully. Its content and component design are specified separately in [Dashboard Design Specification](dashboard_design.md).
 
 ### 3.2 File
+
 - New
 - Open
 - Save
 - Save As
 - Exit
 
-The File menu is a **command menu**, not a page-navigation module. Its submenu items execute workspace or application actions; they must not create or display placeholder pages in the main content area.
-
-Command mapping:
-- **New** executes the agreed **NEW TIMETABLE** operation and creates a new workspace.
-- **Open** executes the agreed **OPEN AS** operation and prompts the user to select a `.tavio` workspace file.
-- **Save** explicitly saves the active workspace to its current `.tavio` file.
-- **Save As** saves the active workspace to a separately selected `.tavio` file without modifying its source.
-- **Exit** runs the application's safe exit workflow, including unsaved-change and applicable recovery-failure handling.
-
-The visible labels may remain concise as shown above; the underlying operation must follow the workspace-management decisions. These commands are not master-data pages and must never be routed to the page stack.
+The menu labels and their placement in the navigation hierarchy are recorded as agreed. The exact behaviour of each item—including its action, workflow, prompts, validation, save semantics, and handling of unsaved changes—has **not** been finalized in this document and must be designed separately.
 
 ### 3.3 School Setup
+
 - School Profile
 - School Administrators
 - Schedule Signatories
 
 ### 3.4 Master Data
+
 - Teachers
 - Classes
 - Class Teacher
@@ -70,54 +67,79 @@ The visible labels may remain concise as shown above; the underlying operation m
 - Teaching Distribution
 
 ### 3.5 Timetable
+
 - Generate Timetable
 - Timetable Versions
 - View Timetable
 
 ### 3.6 Manual Editor
+
 - Edit Timetable
 - Validate Changes
 
 ### 3.7 Absences & Relief
+
 - Teacher Absences
 - Relief Management
 - Relief Timetable
 
 ### 3.8 Reports
+
 - PDF Preview
 - Generate PDF
 - Report Settings
 
 ### 3.9 Settings
+
 - General
 - Appearance
 - About TAVIO
 
-The module names and submenu labels above describe the intended navigation structure. File is intentionally different from the other main items: it dispatches commands instead of navigating to pages. The presence of any menu item does not mean its underlying feature has already been implemented.
+The menu groups and labels above document the agreed navigation arrangement. Listing a menu item here does not mean that its page, command, or underlying feature is implemented or that its functional requirements have been approved.
 
-## 4. Dashboard
+## 4. Dashboard reference
 
-Dashboard is the main landing page after a workspace opens successfully. Its content, information hierarchy, components, and interaction design are maintained separately in [Dashboard Design Specification](dashboard_design.md).
+Dashboard is the main landing page after a workspace opens successfully. Its information hierarchy, components, content, and interaction design are maintained separately in [Dashboard Design Specification](dashboard_design.md).
 
-## 7. Scope boundaries and implementation notes
+## 5. Agreed scope and outstanding design
 
-This document records the agreed UI navigation structure and sidebar design direction only. Dashboard content and layout decisions belong in [dashboard_design.md](dashboard_design.md).
+### 5.1 Agreed
 
-It does not authorize:
+- The modern ribbon-style left sidebar.
+- Expanded and collapsed sidebar presentation.
+- The sidebar's expand/minimize control and remembered display state.
+- The main menu groups, submenu labels, ordering, and placement recorded in this document.
+- Dashboard's role as the landing-page destination, with its detailed design maintained in a separate document.
+
+### 5.2 Not yet finalized
+
+- The action performed by each button or submenu item.
+- The workflows, prompts, validation, confirmations, and error handling associated with those actions.
+- The page-level behaviour and detailed interaction requirements for each module.
+- The functional relationship and integration between modules.
+- Implementation sequencing and technical details.
+
+For example, the File submenu items (New, Open, Save, Save As, and Exit) have agreed labels and navigation placement, but their individual functions and complete workflows remain open for separate discussion and approval.
+
+## 6. Implementation boundaries
+
+This document records navigation presentation and structure only. It does not authorize:
+
+- Implementing or changing button and submenu functionality.
+- Implementing module workflows or page-level behaviour.
 - Changes to the database schema or migrations.
-- Changes to existing stable application workflows.
-- Implementation of modules that are not yet developed.
 - Changes to workspace persistence, recovery, or timetable-generation logic.
+- Treating a listed menu item as evidence that its feature is complete.
 
-Detailed page layouts, field-level behaviour, validation messages, permissions (if applicable), and implementation sequencing should be designed separately before implementation.
+Functional specifications should be discussed and approved separately before implementation.
 
-## 8. Agreed design summary
+## 7. Agreed design summary
 
 1. TAVIO uses a modern ribbon-style left sidebar.
-2. The sidebar supports Expanded and Collapsed modes.
-3. The sidebar state is remembered between application launches.
-4. Navigation is organized into the modules listed in Section 3.
-5. Dashboard is the main landing page after opening a workspace; its design is specified in [dashboard_design.md](dashboard_design.md).
-6. File is a command menu: New, Open, Save, Save As, and Exit execute actions and never open content pages.
-7. Other main menus and their submenus navigate to pages only when the corresponding page exists and is implemented.
-8. This is a design record, not implementation authorization.
+2. The sidebar supports Expanded and Collapsed presentation.
+3. The sidebar's selected display state is remembered between application launches.
+4. Navigation is organized into the main menu groups and submenu labels listed in Section 3.
+5. Dashboard is the landing-page destination after a workspace opens; its detailed design is specified in [dashboard_design.md](dashboard_design.md).
+6. The menu labels, hierarchy, ordering, and placement are agreed.
+7. The functions and workflows behind individual buttons and submenu items—including the File submenu—remain to be designed and approved.
+8. This document is a navigation design record, not implementation authorization.
